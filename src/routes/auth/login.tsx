@@ -134,13 +134,17 @@ function LoginPage() {
                 <Input
                   id="phone"
                   type="tel"
-                  inputMode="tel"
+                  inputMode="numeric"
                   placeholder="Enter your phone number"
                   value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
+                  onChange={(event) => {
+                    const val = event.target.value.replace(/\D/g, '').slice(0, 10)
+                    setPhone(val)
+                  }}
                   className="h-12 pl-9"
                   disabled={loading}
                   required
+                  maxLength={10}
                 />
               </div>
             </div>
