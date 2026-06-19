@@ -135,7 +135,7 @@ function LoginPage() {
                   id="phone"
                   type="tel"
                   inputMode="tel"
-                  placeholder="98765 43210"
+                  placeholder="Enter your phone number"
                   value={phone}
                   onChange={(event) => setPhone(event.target.value)}
                   className="h-12 pl-9"
