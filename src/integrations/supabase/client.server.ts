@@ -3,10 +3,11 @@
 // Use this for admin operations in server functions and server routes only.
 // For user-authenticated queries (with RLS), use the auth middleware instead.
 import { createClient } from "@supabase/supabase-js";
+import { readServerEnv } from "@/lib/env.server";
 import type { Database } from "./types";
 
 function readRequiredSupabaseEnv(name: string, placeholders: string[]) {
-  const value = process.env[name];
+  const value = readServerEnv(name);
   const isPlaceholder = placeholders.some((placeholder) => value?.includes(placeholder));
 
   if (!value || isPlaceholder) {
@@ -26,7 +27,7 @@ function createSupabaseAdminClient() {
   ]);
 
   if (
-    serviceRoleKey === process.env.SUPABASE_PUBLISHABLE_KEY ||
+    serviceRoleKey === readServerEnv("SUPABASE_PUBLISHABLE_KEY") ||
     serviceRoleKey.startsWith("sb_publishable_")
   ) {
     const message =

@@ -9,10 +9,12 @@ function isMissingSupabaseValue(value: string | undefined, placeholders: string[
 
 function createSupabaseClient() {
   const isBrowser = typeof window !== "undefined";
-  const SUPABASE_URL = isBrowser ? import.meta.env.VITE_SUPABASE_URL : process.env.SUPABASE_URL;
+  const SUPABASE_URL = isBrowser
+    ? import.meta.env.VITE_SUPABASE_URL
+    : process.env.SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
   const SUPABASE_PUBLISHABLE_KEY = isBrowser
     ? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-    : process.env.SUPABASE_PUBLISHABLE_KEY;
+    : process.env.SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
   const missingUrl = isMissingSupabaseValue(SUPABASE_URL, ["your-project.supabase.co"]);
   const missingPublishableKey = isMissingSupabaseValue(SUPABASE_PUBLISHABLE_KEY, [

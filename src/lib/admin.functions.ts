@@ -182,15 +182,7 @@ const callOrderSchema = z.object({
 });
 
 export const getCallOrderSettings = createServerFn({ method: "GET" }).handler(async () => {
-  const supabaseAdmin = await getAdmin();
-  const db = supabaseAdmin as any;
-  const { data } = await db
-    .from("call_order_settings")
-    .select("*")
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return (data ?? {
+  const fallback = {
     primary_phone: "+919999999999",
     secondary_phone: "",
     whatsapp_number: "+919999999999",
@@ -199,7 +191,22 @@ export const getCallOrderSettings = createServerFn({ method: "GET" }).handler(as
     available_to: "21:00",
     instructions:
       "Call us with your items, quantity, delivery address and preferred payment method.",
-  }) as {
+  };
+
+  const supabaseAdmin = await getAdmin();
+  const db = supabaseAdmin as any;
+  const { data, error } = await db
+    .from("call_order_settings")
+    .select("*")
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[call-order] using fallback settings", error);
+  }
+
+  return (error ? fallback : (data ?? fallback)) as {
     id?: string;
     primary_phone: string;
     secondary_phone: string | null;
