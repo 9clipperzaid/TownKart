@@ -116,7 +116,7 @@ function CartPage() {
           );
           resolve(null);
         },
-        { enableHighAccuracy: true, maximumAge: 60_000, timeout: 12_000 },
+        { enableHighAccuracy: false, maximumAge: 60_000, timeout: 15_000 },
       );
     });
 
