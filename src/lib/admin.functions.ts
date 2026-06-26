@@ -592,6 +592,95 @@ export const adminSaveProduct = createServerFn({ method: "POST" })
     return { id: row.id };
   });
 
+const bulkProductSchema = z.object({
+  products: z.array(productSchema.omit({ id: true })).min(1).max(500),
+});
+
+export const adminBulkImportProducts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => bulkProductSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const supabaseAdmin = await getAdmin();
+    const now = new Date().toISOString();
+    let created = 0;
+    let updated = 0;
+
+    for (const product of data.products) {
+      const payload = {
+        ...product,
+        description: product.description ?? null,
+        category: product.category ?? null,
+        image_url: product.image_url ?? null,
+        discount_price: product.discount_price ?? null,
+        sku: product.sku ?? null,
+        is_available: product.status === "active" && product.is_available,
+      };
+
+      let existing: { id: string; price: number } | null = null;
+      if (product.sku) {
+        const { data: match } = await supabaseAdmin
+          .from("products")
+          .select("id, price")
+          .eq("store_id", product.store_id)
+          .eq("sku", product.sku)
+          .maybeSingle();
+        existing = match;
+      }
+
+      if (!existing) {
+        const { data: matches } = await supabaseAdmin
+          .from("products")
+          .select("id, price")
+          .eq("store_id", product.store_id)
+          .ilike("name", product.name)
+          .limit(1);
+        existing = matches?.[0] ?? null;
+      }
+
+      if (existing) {
+        const priceChanged = Number(existing.price) !== Number(product.price);
+        const { error } = await supabaseAdmin
+          .from("products")
+          .update(priceChanged ? { ...payload, price_updated_at: now } : payload)
+          .eq("id", existing.id);
+        if (error) throw new Error(error.message);
+        if (priceChanged) {
+          await supabaseAdmin.from("price_history").insert({
+            product_id: existing.id,
+            old_price: existing.price,
+            new_price: product.price,
+            changed_by: context.userId,
+            reason: "bulk import",
+          });
+        }
+        updated += 1;
+      } else {
+        const { data: row, error } = await supabaseAdmin
+          .from("products")
+          .insert({ ...payload, price_updated_at: now })
+          .select("id")
+          .single();
+        if (error) throw new Error(error.message);
+        await supabaseAdmin.from("price_history").insert({
+          product_id: row.id,
+          old_price: null,
+          new_price: product.price,
+          changed_by: context.userId,
+          reason: "bulk import",
+        });
+        created += 1;
+      }
+    }
+
+    await logAction(context.userId, "bulk_import", "product", null, {
+      created,
+      updated,
+      count: data.products.length,
+    });
+    return { created, updated };
+  });
+
 export const adminDeleteProduct = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
@@ -958,6 +1047,11 @@ const paymentSettingsSchema = z.object({
   instructions: z.string().trim().max(500).optional().nullable(),
 });
 
+const storeOrderSettingsSchema = z.object({
+  orders_enabled: z.boolean().default(true),
+  closed_message: z.string().trim().max(200).optional().nullable(),
+});
+
 const homeBannerSchema = z.object({
   id: z.string().trim().min(1).max(80),
   title: z.string().trim().min(1).max(120),
@@ -1047,6 +1141,40 @@ export const adminSavePaymentSettings = createServerFn({ method: "POST" })
       online_enabled: data.online_enabled,
       upi_id: data.upi_id,
     });
+    return { ok: true };
+  });
+
+export const getStoreOrderSettings = createServerFn({ method: "GET" }).handler(async () => {
+  const supabaseAdmin = await getAdmin();
+  const db = supabaseAdmin as any;
+  const { data } = await db
+    .from("marketplace_settings")
+    .select("value")
+    .eq("key", "store_orders")
+    .maybeSingle();
+  const parsed = storeOrderSettingsSchema.safeParse(data?.value);
+  return parsed.success
+    ? parsed.data
+    : {
+        orders_enabled: true,
+        closed_message: "Store is closed right now. Please order again tomorrow.",
+      };
+});
+
+export const adminSaveStoreOrderSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => storeOrderSettingsSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const supabaseAdmin = await getAdmin();
+    const db = supabaseAdmin as any;
+    const { error } = await db.from("marketplace_settings").upsert({
+      key: "store_orders",
+      value: data,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(error.message);
+    await logAction(context.userId, "update", "marketplace_settings", "store_orders", data);
     return { ok: true };
   });
 

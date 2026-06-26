@@ -7,9 +7,11 @@ import { Plus, Trash2 } from "lucide-react";
 import {
   adminSaveHomeBanners,
   adminSavePaymentSettings,
+  adminSaveStoreOrderSettings,
   adminSaveSupportSettings,
   getHomeBanners,
   getPaymentSettings,
+  getStoreOrderSettings,
   getSupportSettings,
 } from "@/lib/admin.functions";
 import { userErrorMessage } from "@/lib/utils";
@@ -29,12 +31,18 @@ function SettingsPage() {
   const getSettings = useServerFn(getSupportSettings);
   const getBanners = useServerFn(getHomeBanners);
   const getPayments = useServerFn(getPaymentSettings);
+  const getStoreOrders = useServerFn(getStoreOrderSettings);
   const saveSettings = useServerFn(adminSaveSupportSettings);
   const saveBanners = useServerFn(adminSaveHomeBanners);
   const savePayments = useServerFn(adminSavePaymentSettings);
+  const saveStoreOrders = useServerFn(adminSaveStoreOrderSettings);
   const [phone, setPhone] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [email, setEmail] = useState("");
+  const [ordersEnabled, setOrdersEnabled] = useState(true);
+  const [closedMessage, setClosedMessage] = useState(
+    "Store is closed right now. Please order again tomorrow.",
+  );
   const [codEnabled, setCodEnabled] = useState(true);
   const [onlineEnabled, setOnlineEnabled] = useState(false);
   const [upiId, setUpiId] = useState("");
@@ -64,6 +72,11 @@ function SettingsPage() {
   const { data: paymentData } = useQuery({
     queryKey: ["payment-settings"],
     queryFn: () => getPayments(),
+  });
+
+  const { data: storeOrderData } = useQuery({
+    queryKey: ["store-order-settings"],
+    queryFn: () => getStoreOrders(),
   });
 
   useEffect(() => {
@@ -98,6 +111,14 @@ function SettingsPage() {
     setPayeeName(paymentData.payee_name ?? "TownKart");
     setPaymentInstructions(paymentData.instructions ?? "");
   }, [paymentData]);
+
+  useEffect(() => {
+    if (!storeOrderData) return;
+    setOrdersEnabled(storeOrderData.orders_enabled);
+    setClosedMessage(
+      storeOrderData.closed_message || "Store is closed right now. Please order again tomorrow.",
+    );
+  }, [storeOrderData]);
 
   const save = useMutation({
     mutationFn: () => saveSettings({ data: { phone, whatsapp, email } }),
@@ -141,6 +162,21 @@ function SettingsPage() {
     onSuccess: () => {
       toast.success("Payment settings saved");
       qc.invalidateQueries({ queryKey: ["payment-settings"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e)),
+  });
+
+  const saveStoreOrderSettings = useMutation({
+    mutationFn: () =>
+      saveStoreOrders({
+        data: {
+          orders_enabled: ordersEnabled,
+          closed_message: closedMessage || null,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Store order settings saved");
+      qc.invalidateQueries({ queryKey: ["store-order-settings"] });
     },
     onError: (e: Error) => toast.error(userErrorMessage(e)),
   });
@@ -195,6 +231,37 @@ function SettingsPage() {
         </div>
         <Button disabled={save.isPending} onClick={() => save.mutate()}>
           {save.isPending ? "Saving..." : "Save settings"}
+        </Button>
+      </div>
+
+      <div className="space-y-4 rounded-2xl border border-border/60 bg-card p-5 shadow-card">
+        <div>
+          <h2 className="text-lg font-bold">Store orders</h2>
+          <p className="text-sm text-muted-foreground">
+            Turn this off at night to stop customers from placing new orders.
+          </p>
+        </div>
+
+        <Label className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
+          <span>{ordersEnabled ? "Accepting orders" : "Orders closed"}</span>
+          <Switch checked={ordersEnabled} onCheckedChange={setOrdersEnabled} />
+        </Label>
+
+        <div className="space-y-1.5">
+          <Label>Closed message</Label>
+          <Textarea
+            value={closedMessage}
+            onChange={(e) => setClosedMessage(e.target.value)}
+            placeholder="Store is closed right now. Please order again tomorrow."
+            rows={2}
+          />
+        </div>
+
+        <Button
+          disabled={saveStoreOrderSettings.isPending}
+          onClick={() => saveStoreOrderSettings.mutate()}
+        >
+          {saveStoreOrderSettings.isPending ? "Saving..." : "Save order settings"}
         </Button>
       </div>
 

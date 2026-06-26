@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus, Pencil, Trash2, History, Search } from "lucide-react";
+import { Download, History, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
+  adminBulkImportProducts,
   adminListStores,
   adminListProducts,
   adminSaveProduct,
@@ -73,6 +74,21 @@ type FormState = {
   is_available: boolean;
 };
 
+type BulkImportProduct = {
+  store_id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  image_url: string | null;
+  price: number;
+  discount_price: number | null;
+  unit: string;
+  stock_quantity: number;
+  sku: string | null;
+  status: "active" | "inactive";
+  is_available: boolean;
+};
+
 function emptyForm(storeId: string): FormState {
   return {
     store_id: storeId,
@@ -96,12 +112,16 @@ function ProductsPage() {
   const listProducts = useServerFn(adminListProducts);
   const listCats = useServerFn(adminListCategories);
   const save = useServerFn(adminSaveProduct);
+  const bulkImport = useServerFn(adminBulkImportProducts);
   const remove = useServerFn(adminDeleteProduct);
   const history = useServerFn(adminPriceHistory);
 
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [q, setQ] = useState("");
   const [form, setForm] = useState<FormState | null>(null);
+  const [importStoreId, setImportStoreId] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
   const [historyFor, setHistoryFor] = useState<ProductRow | null>(null);
 
   const { data: stores = [] } = useQuery({
@@ -171,9 +191,130 @@ function ProductsPage() {
     onError: (e: Error) => toast.error(userErrorMessage(e)),
   });
 
+  const importMut = useMutation({
+    mutationFn: (products: BulkImportProduct[]) => bulkImport({ data: { products } }),
+    onSuccess: (result) => {
+      toast.success(`Import complete: ${result.created} created, ${result.updated} updated`);
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
+      setImportOpen(false);
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e)),
+  });
+
   const filtered = products.filter((p) => !q || p.name.toLowerCase().includes(q.toLowerCase()));
 
   const canCreate = stores.length > 0;
+  const selectedImportStore = importStoreId || (storeFilter !== "all" ? storeFilter : stores[0]?.id);
+
+  function parseCsv(text: string) {
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let cell = "";
+    let quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const next = text[i + 1];
+      if (char === '"' && quoted && next === '"') {
+        cell += '"';
+        i += 1;
+      } else if (char === '"') {
+        quoted = !quoted;
+      } else if (char === "," && !quoted) {
+        row.push(cell);
+        cell = "";
+      } else if ((char === "\n" || char === "\r") && !quoted) {
+        if (char === "\r" && next === "\n") i += 1;
+        row.push(cell);
+        if (row.some((value) => value.trim())) rows.push(row);
+        row = [];
+        cell = "";
+      } else {
+        cell += char;
+      }
+    }
+    row.push(cell);
+    if (row.some((value) => value.trim())) rows.push(row);
+    return rows;
+  }
+
+  function toBool(value: string | undefined, fallback: boolean) {
+    const normalized = (value ?? "").trim().toLowerCase();
+    if (!normalized) return fallback;
+    return ["1", "true", "yes", "y", "live", "active"].includes(normalized);
+  }
+
+  async function handleImportFile(file: File) {
+    if (!selectedImportStore) {
+      toast.error("Choose a store before importing.");
+      return;
+    }
+    const rows = parseCsv(await file.text());
+    if (rows.length < 2) {
+      toast.error("CSV needs a header row and at least one product.");
+      return;
+    }
+    const headers = rows[0].map((header) => header.trim().toLowerCase());
+    const indexOf = (name: string) => headers.indexOf(name);
+    const required = ["name", "price"];
+    const missing = required.filter((name) => indexOf(name) === -1);
+    if (missing.length) {
+      toast.error(`Missing CSV columns: ${missing.join(", ")}`);
+      return;
+    }
+    const valueAt = (row: string[], name: string) => {
+      const index = indexOf(name);
+      return index >= 0 ? row[index]?.trim() ?? "" : "";
+    };
+
+    const imported: BulkImportProduct[] = rows.slice(1).map((row, rowIndex) => {
+      const name = valueAt(row, "name");
+      const price = Number(valueAt(row, "price"));
+      if (!name || !Number.isFinite(price)) {
+        throw new Error(`Row ${rowIndex + 2}: name and numeric price are required.`);
+      }
+      const discountText = valueAt(row, "discount_price");
+      const discountPrice = discountText ? Number(discountText) : null;
+      if (discountPrice != null && !Number.isFinite(discountPrice)) {
+        throw new Error(`Row ${rowIndex + 2}: discount_price must be numeric.`);
+      }
+      const stockText = valueAt(row, "stock_quantity") || valueAt(row, "stock");
+      const stockQuantity = stockText ? Number(stockText) : 0;
+      if (!Number.isFinite(stockQuantity)) {
+        throw new Error(`Row ${rowIndex + 2}: stock_quantity must be numeric.`);
+      }
+      const status = valueAt(row, "status").toLowerCase() === "inactive" ? "inactive" : "active";
+      return {
+        store_id: selectedImportStore,
+        name,
+        description: valueAt(row, "description") || null,
+        category: valueAt(row, "category") || null,
+        image_url: valueAt(row, "image_url") || null,
+        price,
+        discount_price: discountPrice,
+        unit: valueAt(row, "unit") || "1 unit",
+        stock_quantity: Math.max(0, Math.floor(stockQuantity)),
+        sku: valueAt(row, "sku") || null,
+        status,
+        is_available: status === "active" && toBool(valueAt(row, "is_available"), true),
+      };
+    });
+
+    importMut.mutate(imported);
+  }
+
+  function downloadTemplate() {
+    const csv = [
+      "name,price,stock_quantity,unit,sku,category,description,discount_price,image_url,status,is_available",
+      "Red bull,140,100,1 unit,RB-001,confectionery,Energy drink,,https://example.com/red-bull.jpg,active,true",
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "townkart-products-template.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
 
   return (
     <div className="space-y-6">
@@ -184,14 +325,26 @@ function ProductsPage() {
             Manage inventory and pricing for every store.
           </p>
         </div>
-        <Button
-          disabled={!canCreate}
-          onClick={() =>
-            setForm(emptyForm(storeFilter === "all" ? (stores[0]?.id ?? "") : storeFilter))
-          }
-        >
-          <Plus className="h-4 w-4" /> New
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            variant="outline"
+            disabled={!canCreate}
+            onClick={() => {
+              setImportStoreId(storeFilter === "all" ? (stores[0]?.id ?? "") : storeFilter);
+              setImportOpen(true);
+            }}
+          >
+            <Upload className="h-4 w-4" /> Import CSV
+          </Button>
+          <Button
+            disabled={!canCreate}
+            onClick={() =>
+              setForm(emptyForm(storeFilter === "all" ? (stores[0]?.id ?? "") : storeFilter))
+            }
+          >
+            <Plus className="h-4 w-4" /> New
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row">
@@ -476,6 +629,67 @@ function ProductsPage() {
               {saveMut.isPending ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk import */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import products from CSV</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Store</Label>
+              <Select value={selectedImportStore ?? ""} onValueChange={setImportStoreId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose store" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stores.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-3 text-sm text-muted-foreground">
+              CSV columns: name, price, stock_quantity, unit, sku, category, description,
+              discount_price, image_url, status, is_available. Use image_url for product photos.
+            </div>
+
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  handleImportFile(file).catch((error: Error) =>
+                    toast.error(userErrorMessage(error, "Could not import CSV")),
+                  );
+                }
+                e.currentTarget.value = "";
+              }}
+            />
+
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={downloadTemplate}>
+                <Download className="h-4 w-4" /> Download template
+              </Button>
+              <Button
+                type="button"
+                disabled={!selectedImportStore || importMut.isPending}
+                onClick={() => importInputRef.current?.click()}
+              >
+                <Upload className="h-4 w-4" />
+                {importMut.isPending ? "Importing..." : "Choose CSV"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

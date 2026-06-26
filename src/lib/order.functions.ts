@@ -82,6 +82,20 @@ export const secureCheckout = createServerFn({ method: "POST" })
       .select("value")
       .eq("key", "payment")
       .maybeSingle();
+    const { data: orderSettingsRow } = await (supabaseAdmin as any)
+      .from("marketplace_settings")
+      .select("value")
+      .eq("key", "store_orders")
+      .maybeSingle();
+    const orderSettings = orderSettingsRow?.value ?? {
+      orders_enabled: true,
+      closed_message: "Store is closed right now. Please order again tomorrow.",
+    };
+    if (orderSettings.orders_enabled === false) {
+      throw new Error(
+        orderSettings.closed_message || "Store is closed right now. Please order again tomorrow.",
+      );
+    }
     const paymentSettings = paymentRow?.value ?? { cod_enabled: true, online_enabled: false };
     if (data.paymentMethod === "cod" && paymentSettings.cod_enabled === false) {
       throw new Error("Cash on delivery is currently disabled.");
