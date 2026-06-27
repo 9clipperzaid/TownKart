@@ -16,6 +16,26 @@ import { FloatingContact } from "@/components/FloatingContact";
 import { supabase } from "@/integrations/supabase/client";
 import { syncGoogleProfile } from "@/lib/auth-profile";
 
+const SITE_URL = "https://www.townkart.store";
+const SITE_NAME = "TownKart";
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "@id": `${SITE_URL}/#business`,
+  name: SITE_NAME,
+  alternateName: "TownKart Store",
+  url: SITE_URL,
+  logo: `${SITE_URL}/favicon-512.png`,
+  image: `${SITE_URL}/townkart-logo.png`,
+  description:
+    "TownKart delivers groceries, food, medicines and more from neighbourhood stores in minutes.",
+  areaServed: {
+    "@type": "City",
+    name: "Nehtaur",
+  },
+};
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -93,13 +113,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         property: "og:description",
         content: "Order from local stores and get it delivered in minutes.",
       },
+      { property: "og:site_name", content: SITE_NAME },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: SITE_URL },
+      { property: "og:image", content: `${SITE_URL}/townkart-logo.png` },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@TownKart" },
+      { name: "theme-color", content: "#16a34a" },
     ],
     links: [
-      { rel: "icon", type: "image/png", href: "/townkart-logo.png" },
-      { rel: "apple-touch-icon", href: "/townkart-logo.png" },
+      { rel: "canonical", href: SITE_URL },
+      { rel: "icon", type: "image/png", sizes: "48x48", href: "/favicon-48.png" },
+      { rel: "icon", type: "image/png", sizes: "192x192", href: "/favicon-192.png" },
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/favicon-180.png" },
+      { rel: "manifest", href: "/site.webmanifest" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       {
         rel: "preconnect",
@@ -127,6 +154,10 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
       </head>
       <body>
         {children}

@@ -9,18 +9,20 @@ import heroImg from "@/assets/hero.jpg";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "TownKart - Hyperlocal Delivery from Local Shops" },
+      { title: "TownKart - Nehtaur Online Grocery, Food & Medicine Delivery" },
       {
         name: "description",
         content:
-          "Order groceries, food, medicines and more from neighbourhood stores. Fast hyperlocal delivery in minutes with TownKart.",
+          "Order groceries, food, medicines, gifts and daily essentials from Nehtaur neighbourhood stores. Fast local delivery in minutes with TownKart.",
       },
-      { property: "og:title", content: "TownKart - Hyperlocal Delivery" },
+      { property: "og:title", content: "TownKart - Nehtaur Hyperlocal Delivery" },
       {
         property: "og:description",
-        content: "Order from local stores and get it delivered in minutes with TownKart.",
+        content:
+          "Order groceries, food, medicines and essentials from local Nehtaur stores with TownKart.",
       },
     ],
+    links: [{ rel: "canonical", href: "https://www.townkart.store/" }],
   }),
   component: Landing,
 });
@@ -104,7 +106,7 @@ function Landing() {
           Your <span className="text-gradient">neighbourhood</span>, delivered.
         </h1>
         <p className="mt-3 text-base text-muted-foreground">
-          Groceries, fresh food, medicines and gifts from local shops — at your door in minutes.
+          Groceries, fresh food, medicines and gifts from local shops - at your door in minutes.
         </p>
 
         <div className="mt-6 grid grid-cols-3 gap-3">
@@ -129,7 +131,7 @@ function Landing() {
           <Link to="/auth/login">Get started</Link>
         </Button>
         <p className="mt-3 text-center text-xs text-muted-foreground">
-          Sign in with your phone number — no password needed.
+          Sign in with your phone number - no password needed.
         </p>
       </div>
     </div>
