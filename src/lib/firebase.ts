@@ -1,16 +1,17 @@
 import { createClientOnlyFn } from "@tanstack/react-start";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA1z3uHEoqLde7LZLkBTjczfpUXs7pzAw",
-  authDomain: "town-kart.firebaseapp.com",
-  projectId: "town-kart",
-  storageBucket: "town-kart.firebasestorage.app",
-  messagingSenderId: "5354559537",
-  appId: "1:5354559537:web:80e6fdc61ca60b5841dd10",
-  measurementId: "G-990NDKQJVX",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyA1z3uHEoqLde7LZLkBTjczfpUXs7pzAw",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "town-kart.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "town-kart",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "town-kart.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "5354559537",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:5354559537:web:80e6fdc61ca60b5841dd10",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-990NDKQJVX",
 };
 
 const VAPID_KEY =
+  import.meta.env.VITE_FIREBASE_VAPID_KEY ||
   "BJm1PS1O2kSRmROv3xMPI9Pf4GB0IZIfamZZPg83WpJNOEXVh9eSR5jU1V6vfEVmpmg6U5xJfWWkgGEAie9wnw4";
 
 export const setupFcmClient = createClientOnlyFn(

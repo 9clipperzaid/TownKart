@@ -17,6 +17,14 @@ Set these Environment Variables in Netlify before deploying:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_MEASUREMENT_ID`
+- `VITE_FIREBASE_VAPID_KEY`
 - `FIREBASE_PROJECT_ID` (optional, for order push popups)
 - `FIREBASE_CLIENT_EMAIL` (optional, for order push popups)
 - `FIREBASE_PRIVATE_KEY` (optional, for order push popups)
@@ -25,13 +33,27 @@ The `VITE_*` values are required at build time for the browser bundle. The non-`
 
 ## Firebase order push popups
 
-Admins can receive browser push popups for new orders through Firebase Cloud Messaging. Add the Firebase service account values to your hosting environment:
+Admins can receive browser push popups for new orders through Firebase Cloud Messaging.
+
+Add the Firebase web app config values to your hosting environment:
+
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_MEASUREMENT_ID`
+- `VITE_FIREBASE_VAPID_KEY`
+
+Also add the Firebase service account values to your hosting environment:
 
 - `FIREBASE_PROJECT_ID`
 - `FIREBASE_CLIENT_EMAIL`
 - `FIREBASE_PRIVATE_KEY`
 
 The `FIREBASE_PRIVATE_KEY` value should keep the `\n` newline escapes from the downloaded Firebase service account JSON.
+The `VITE_FIREBASE_*` values are public browser values, but they must match the exact Firebase web app config.
 
 ## Vercel deployment
 
@@ -42,6 +64,14 @@ Set these Environment Variables in Vercel for Production, Preview, and Developme
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_MEASUREMENT_ID`
+- `VITE_FIREBASE_VAPID_KEY`
 - `FIREBASE_PROJECT_ID` (optional, for order push popups)
 - `FIREBASE_CLIENT_EMAIL` (optional, for order push popups)
 - `FIREBASE_PRIVATE_KEY` (optional, for order push popups)
