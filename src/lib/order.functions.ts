@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { sendNewOrderPushNotification } from "@/lib/fcm.server";
 
 const addressSchema = z.string().trim().min(10, "Add a complete delivery address").max(500);
 const latitudeSchema = z.number().min(-90).max(90).optional().nullable();
@@ -188,6 +189,16 @@ export const secureCheckout = createServerFn({ method: "POST" })
         body: `${store.name} received your order.`,
         type: "order",
       });
+
+      await sendNewOrderPushNotification({
+        orderId: order.id,
+        storeId,
+        storeName: store.name,
+        total,
+      }).catch((error) => {
+        console.warn("Could not send FCM order notification", error);
+      });
+
       orderIds.push(order.id);
     }
 

@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   LayoutDashboard,
   Tags,
@@ -29,6 +30,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { registerFcmToken } from "@/lib/fcm.functions";
+import { setupFcmClient } from "@/lib/firebase";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   beforeLoad: async () => {
@@ -128,6 +131,7 @@ function AdminShell() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const registerFcm = useServerFn(registerFcmToken);
 
   const isActive = (to: string, exact?: boolean) =>
     exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
@@ -199,6 +203,44 @@ function AdminShell() {
       supabase.removeChannel(channel);
     };
   }, [navigate, queryClient]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+
+    async function setupPushNotifications() {
+      try {
+        const result = await setupFcmClient((payload) => {
+          toast.success(payload.title, {
+            description: payload.body,
+            duration: Number.POSITIVE_INFINITY,
+            action: {
+              label: "View",
+              onClick: () => navigate({ to: "/admin/orders" }),
+            },
+          });
+        });
+        if (!result?.token || disposed) return;
+
+        unsubscribe = result.unsubscribe;
+        await registerFcm({
+          data: {
+            token: result.token,
+            userAgent: navigator.userAgent,
+          },
+        });
+      } catch (error) {
+        console.warn("Could not register FCM notifications", error);
+      }
+    }
+
+    void setupPushNotifications();
+
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, [navigate, registerFcm]);
 
   const navList = (
     <nav className="flex flex-col gap-1">
