@@ -26,21 +26,14 @@ type OrderWhatsappDetails = {
   items: OrderWhatsappItem[];
 };
 
-function cleanPhoneNumber(phone: string) {
+function cleanPhoneForChatId(phone: string) {
   const trimmed = phone.trim();
-  if (trimmed.endsWith("@c.us") || trimmed.endsWith("@g.us") || trimmed.endsWith("@lid")) {
-    return trimmed;
-  }
+  if (trimmed.endsWith("@c.us") || trimmed.endsWith("@g.us")) return trimmed;
 
-  return trimmed.replace(/\D/g, "");
-}
+  const digits = trimmed.replace(/\D/g, "");
+  if (!digits) return "";
 
-function phoneToChatId(phone: string) {
-  const cleaned = cleanPhoneNumber(phone);
-  if (!cleaned) return "";
-  if (cleaned.includes("@")) return cleaned;
-
-  return `${cleaned}@c.us`;
+  return `${digits}@c.us`;
 }
 
 function openWaApiBaseUrl() {
@@ -57,41 +50,6 @@ function openWaSendTextPath(sessionId: string) {
   return pathTemplate
     .replace("{sessionId}", encodeURIComponent(sessionId))
     .replace(/^\/*/, "/");
-}
-
-async function resolveOpenWaChatId({
-  apiBaseUrl,
-  apiKey,
-  sessionId,
-  phone,
-}: {
-  apiBaseUrl: string;
-  apiKey: string;
-  sessionId: string;
-  phone: string;
-}) {
-  const cleaned = cleanPhoneNumber(phone);
-  if (!cleaned || cleaned.includes("@")) return phoneToChatId(phone);
-
-  const response = await fetch(
-    `${apiBaseUrl}/api/sessions/${encodeURIComponent(sessionId)}/contacts/check/${encodeURIComponent(
-      cleaned,
-    )}`,
-    {
-      headers: {
-        "X-API-Key": apiKey,
-      },
-    },
-  );
-
-  if (!response.ok) return phoneToChatId(cleaned);
-
-  const result = (await response.json().catch(() => null)) as {
-    exists?: boolean;
-    whatsappId?: string | null;
-  } | null;
-
-  return result?.whatsappId || phoneToChatId(cleaned);
 }
 
 function formatMoney(value: number) {
@@ -156,7 +114,7 @@ export async function sendOrderWhatsappNotification(order: OrderWhatsappDetails)
 
   if (!apiBaseUrl || !apiKey || !sessionId || !adminPhone) return { skipped: true };
 
-  const chatId = await resolveOpenWaChatId({ apiBaseUrl, apiKey, sessionId, phone: adminPhone });
+  const chatId = cleanPhoneForChatId(adminPhone);
   if (!chatId) return { skipped: true };
 
   const response = await fetch(
