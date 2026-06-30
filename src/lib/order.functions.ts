@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { sendOrderWhatsappNotification } from "@/lib/whatsapp.server";
 
 const addressSchema = z.string().trim().min(10, "Add a complete delivery address").max(500);
 const latitudeSchema = z.number().min(-90).max(90).optional().nullable();
@@ -123,11 +122,6 @@ export const secureCheckout = createServerFn({ method: "POST" })
     }
 
     await supabaseAdmin.from("profiles").update({ address: data.address }).eq("id", userId);
-    const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("full_name, phone, email")
-      .eq("id", userId)
-      .maybeSingle();
 
     const orderIds: string[] = [];
     for (const [storeId, items] of groups) {
@@ -164,7 +158,7 @@ export const secureCheckout = createServerFn({ method: "POST" })
           idempotency_key: orderIdempotencyKey,
           tracking_code: `KZ${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
         })
-        .select("id, tracking_code, created_at")
+        .select("id")
         .single();
       if (orderErr || !order) throw new Error("Could not place order.");
 
@@ -194,33 +188,6 @@ export const secureCheckout = createServerFn({ method: "POST" })
         body: `${store.name} received your order.`,
         type: "order",
       });
-
-      await sendOrderWhatsappNotification({
-        orderId: order.id,
-        trackingCode: order.tracking_code,
-        createdAt: order.created_at,
-        storeName: store.name,
-        customerName: profile?.full_name,
-        customerPhone: profile?.phone,
-        customerEmail: profile?.email,
-        address: data.address,
-        latitude: data.deliveryLatitude ?? null,
-        longitude: data.deliveryLongitude ?? null,
-        locationAccuracy: data.deliveryLocationAccuracy ?? null,
-        subtotal,
-        deliveryFee,
-        total,
-        paymentMethod: data.paymentMethod === "online" ? "Online payment" : "Cash on delivery",
-        paymentReference: data.paymentReference ?? null,
-        items: orderItems.map((item) => ({
-          name: item.name,
-          quantity: item.quantity,
-          unitPrice: item.unit_price,
-        })),
-      }).catch((error) => {
-        console.warn("Could not send WhatsApp order notification", error);
-      });
-
       orderIds.push(order.id);
     }
 
