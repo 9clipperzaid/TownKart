@@ -184,13 +184,6 @@ function AdminShell() {
               : undefined,
           });
 
-          if ("Notification" in window && Notification.permission === "granted") {
-            new Notification("New TownKart order", {
-              body: message,
-              icon: "/townkart-logo.png",
-            });
-          }
-
           queryClient.invalidateQueries({ queryKey: ["operational-orders"] });
         },
       )
@@ -210,16 +203,7 @@ function AdminShell() {
 
     async function setupPushNotifications() {
       try {
-        const result = await setupFcmClient((payload) => {
-          toast.success(payload.title, {
-            description: payload.body,
-            duration: Number.POSITIVE_INFINITY,
-            action: {
-              label: "View",
-              onClick: () => navigate({ to: "/admin/orders" }),
-            },
-          });
-        });
+        const result = await setupFcmClient(() => undefined);
         if (!result?.token || disposed) return;
 
         unsubscribe = result.unsubscribe;

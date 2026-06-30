@@ -46,8 +46,10 @@ firebase.initializeApp(${JSON.stringify(firebaseConfig, null, 2)});
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || "New TownKart order";
-  const body = payload.notification?.body || "A new order was placed.";
+  if (payload.notification) return;
+
+  const title = payload.data?.title || "New TownKart order";
+  const body = payload.data?.body || "A new order was placed.";
   const url = payload.fcmOptions?.link || payload.data?.url || "/admin/orders";
 
   self.registration.showNotification(title, {

@@ -38,15 +38,22 @@ export async function sendFcmToTokens({
 
   return getMessaging(app).sendEachForMulticast({
     tokens: uniqueTokens,
-    notification: { title, body },
+    data: {
+      title,
+      body,
+      url: url || "/admin/orders",
+    },
     webpush: {
       fcmOptions: {
         link: url || "/admin/orders",
       },
       notification: {
+        title,
+        body,
         icon: "/townkart-logo.png",
         badge: "/favicon-192.png",
         requireInteraction: true,
+        data: { url: url || "/admin/orders" },
       },
     },
   });
