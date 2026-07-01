@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -19,6 +19,10 @@ import {
 } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/orders")({
+  beforeLoad: async () => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) throw redirect({ to: "/auth/login", search: { redirectTo: "/orders" } });
+  },
   component: OrdersPage,
 });
 
@@ -120,9 +124,7 @@ function OrdersPage() {
                     </div>
 
                     <p className="mt-2 line-clamp-1 text-sm text-muted-foreground">
-                      {order.order_items
-                        .map((item) => `${item.quantity}x ${item.name}`)
-                        .join(", ")}
+                      {order.order_items.map((item) => `${item.quantity}x ${item.name}`).join(", ")}
                     </p>
 
                     <div className="mt-2 flex items-start gap-1.5 text-xs text-muted-foreground">

@@ -30,10 +30,14 @@ type Store = {
 };
 
 type ProductSearchRow = {
+  id: string;
   store_id: string;
   name: string;
   description: string | null;
   category: string | null;
+  price: number;
+  unit: string;
+  image_url: string | null;
 };
 
 type Category = {
@@ -89,7 +93,7 @@ function HomePage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
-        .select("store_id, name, description, category")
+        .select("id, store_id, name, description, category, price, unit, image_url")
         .eq("is_available", true);
       if (error) throw error;
       return data as ProductSearchRow[];
@@ -287,6 +291,41 @@ function HomePage() {
               active={active === c.key}
               onClick={() => setActive(active === c.key ? null : c.key)}
             />
+          ))}
+        </div>
+      </section>
+
+      <section className="px-4 pt-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold">Popular products</h2>
+          <span className="text-xs font-semibold text-primary">{products.length} items</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {products.slice(0, 12).map((product) => (
+            <Link
+              key={product.id}
+              to="/store/$storeId"
+              params={{ storeId: product.store_id }}
+              className="rounded-2xl border border-border/70 bg-card p-2.5 shadow-card transition hover:-translate-y-0.5 hover:shadow-pop"
+            >
+              {product.image_url ? (
+                <img
+                  src={product.image_url}
+                  alt={product.name}
+                  className="aspect-square w-full rounded-xl object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="flex aspect-square w-full items-center justify-center rounded-xl bg-secondary text-2xl font-extrabold text-primary">
+                  {categories.find((category) => category.key === product.category)?.emoji ?? "TK"}
+                </div>
+              )}
+              <p className="mt-2 text-[11px] font-medium text-muted-foreground">{product.unit}</p>
+              <h3 className="line-clamp-2 min-h-9 text-sm font-semibold leading-snug">
+                {product.name}
+              </h3>
+              <p className="mt-1 text-sm font-extrabold">Rs {Number(product.price).toFixed(0)}</p>
+            </Link>
           ))}
         </div>
       </section>

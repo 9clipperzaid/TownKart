@@ -1,12 +1,17 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, CheckCircle2, Clock, PackageCheck, Truck, XCircle } from "lucide-react";
 import { getMyOrderDetail } from "@/lib/order.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/orders/$orderId")({
+  beforeLoad: async () => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) throw redirect({ to: "/auth/login", search: { redirectTo: "/orders" } });
+  },
   component: OrderDetailPage,
 });
 

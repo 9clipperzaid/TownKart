@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn, userErrorMessage } from "@/lib/utils";
 import { CallToOrder } from "@/components/CallToOrder";
+import { getLocalCart, getUnitOptions, updateLocalCartItem } from "@/lib/local-cart";
 
 export const Route = createFileRoute("/_authenticated/store/$storeId")({
   component: StorePage,
@@ -38,6 +39,7 @@ function StorePage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [availableOnly, setAvailableOnly] = useState(false);
+  const [selectedUnits, setSelectedUnits] = useState<Record<string, string>>({});
 
   const { data: store } = useQuery({
     queryKey: ["store", storeId],
@@ -68,32 +70,80 @@ function StorePage() {
   const { data: cart = {} } = useQuery({
     queryKey: ["cart-map"],
     queryFn: async () => {
-      const { data } = await supabase.from("cart_items").select("product_id, quantity");
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        const map: Record<string, number> = {};
+        Object.values(getLocalCart()).forEach((item) => {
+          map[`${item.productId}::${item.selectedUnit}`] = item.quantity;
+        });
+        return map;
+      }
+      const { data } = await supabase
+        .from("cart_items")
+        .select("product_id, quantity, selected_unit");
       const map: Record<string, number> = {};
-      (data ?? []).forEach((r) => (map[r.product_id] = r.quantity));
+      (data ?? []).forEach((r) => (map[`${r.product_id}::${r.selected_unit || ""}`] = r.quantity));
       return map;
     },
   });
 
+  useEffect(() => {
+    const refresh = () => queryClient.invalidateQueries({ queryKey: ["cart-map"] });
+    window.addEventListener("townkart-local-cart", refresh);
+    return () => window.removeEventListener("townkart-local-cart", refresh);
+  }, [queryClient]);
+
   const setQty = useMutation({
-    mutationFn: async ({ productId, quantity }: { productId: string; quantity: number }) => {
+    mutationFn: async ({
+      product,
+      selectedUnit,
+      unitPrice,
+      quantity,
+    }: {
+      product: Product;
+      selectedUnit: string;
+      unitPrice: number;
+      quantity: number;
+    }) => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not signed in");
+      if (!user) {
+        updateLocalCartItem(
+          {
+            productId: product.id,
+            name: product.name,
+            unit: product.unit,
+            selectedUnit,
+            unitPrice,
+            storeId,
+            storeName: store?.name ?? "TownKart store",
+            imageUrl: product.image_url,
+          },
+          quantity,
+        );
+        return;
+      }
       if (quantity <= 0) {
         await supabase
           .from("cart_items")
           .delete()
-          .eq("product_id", productId)
-          .eq("user_id", user.id);
+          .eq("product_id", product.id)
+          .eq("user_id", user.id)
+          .eq("selected_unit", selectedUnit);
       } else {
-        await supabase
-          .from("cart_items")
-          .upsert(
-            { user_id: user.id, product_id: productId, quantity },
-            { onConflict: "user_id,product_id" },
-          );
+        await supabase.from("cart_items").upsert(
+          {
+            user_id: user.id,
+            product_id: product.id,
+            quantity,
+            selected_unit: selectedUnit,
+            unit_price: unitPrice,
+          } as never,
+          { onConflict: "user_id,product_id,selected_unit" },
+        );
       }
     },
     onSuccess: () => {
@@ -226,7 +276,13 @@ function StorePage() {
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {filtered.map((p, idx) => {
-              const qty = cart[p.id] ?? 0;
+              const unitOptions = getUnitOptions(p);
+              const selectedUnit = selectedUnits[p.id] ?? unitOptions[0]?.label ?? p.unit;
+              const selectedOption =
+                unitOptions.find((option) => option.label === selectedUnit) ?? unitOptions[0];
+              const unitPrice = selectedOption?.unitPrice ?? Number(p.price);
+              const cartKey = `${p.id}::${selectedUnit}`;
+              const qty = cart[cartKey] ?? 0;
               const soldOut = !p.is_available;
               return (
                 <div
@@ -274,7 +330,14 @@ function StorePage() {
                         </span>
                       ) : qty === 0 ? (
                         <button
-                          onClick={() => setQty.mutate({ productId: p.id, quantity: 1 })}
+                          onClick={() =>
+                            setQty.mutate({
+                              product: p,
+                              selectedUnit,
+                              unitPrice,
+                              quantity: 1,
+                            })
+                          }
                           className="inline-flex h-8 items-center rounded-lg border-2 border-primary bg-background px-4 text-xs font-extrabold uppercase tracking-wide text-primary shadow-card transition active:scale-95"
                         >
                           Add
@@ -285,7 +348,9 @@ function StorePage() {
                             className="flex h-7 w-6 items-center justify-center"
                             onClick={() =>
                               setQty.mutate({
-                                productId: p.id,
+                                product: p,
+                                selectedUnit,
+                                unitPrice,
                                 quantity: qty - 1,
                               })
                             }
@@ -297,7 +362,9 @@ function StorePage() {
                             className="flex h-7 w-6 items-center justify-center"
                             onClick={() =>
                               setQty.mutate({
-                                productId: p.id,
+                                product: p,
+                                selectedUnit,
+                                unitPrice,
                                 quantity: qty + 1,
                               })
                             }
@@ -309,11 +376,37 @@ function StorePage() {
                     </div>
                   </div>
 
-                  <p className="text-[11px] font-medium text-muted-foreground">{p.unit}</p>
+                  <p className="text-[11px] font-medium text-muted-foreground">{selectedUnit}</p>
                   <h3 className="line-clamp-2 min-h-[2.25rem] text-sm font-semibold leading-snug">
                     {p.name}
                   </h3>
-                  <p className="mt-auto pt-1.5 text-sm font-extrabold">{formatINR(p.price)}</p>
+                  {p.description && (
+                    <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                      {p.description}
+                    </p>
+                  )}
+                  {unitOptions.length > 1 && (
+                    <div className="mt-2 grid grid-cols-2 gap-1">
+                      {unitOptions.map((option) => (
+                        <button
+                          key={option.label}
+                          type="button"
+                          onClick={() =>
+                            setSelectedUnits((current) => ({ ...current, [p.id]: option.label }))
+                          }
+                          className={cn(
+                            "rounded-lg border px-2 py-1 text-[10px] font-bold transition",
+                            option.label === selectedUnit
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border bg-muted/40 text-muted-foreground",
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-auto pt-1.5 text-sm font-extrabold">{formatINR(unitPrice)}</p>
                 </div>
               );
             })}

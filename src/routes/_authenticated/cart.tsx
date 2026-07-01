@@ -8,6 +8,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { secureCheckout } from "@/lib/order.functions";
 import { formatINR } from "@/lib/format";
 import { userErrorMessage } from "@/lib/utils";
+import {
+  getLocalCart,
+  getSavedDeliveryLocation,
+  saveDeliveryLocation,
+  setLocalCart,
+} from "@/lib/local-cart";
 import { CallToOrder } from "@/components/CallToOrder";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +27,8 @@ type CartRow = {
   id: string;
   quantity: number;
   product_id: string;
+  selected_unit: string;
+  unit_price: number | null;
   products: {
     name: string;
     price: number;
@@ -50,9 +58,30 @@ function CartPage() {
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["cart-detail"],
     queryFn: async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        return Object.values(getLocalCart()).map((item) => ({
+          id: `${item.productId}::${item.selectedUnit}`,
+          quantity: item.quantity,
+          product_id: item.productId,
+          selected_unit: item.selectedUnit,
+          unit_price: item.unitPrice,
+          products: {
+            name: item.name,
+            price: item.unitPrice,
+            unit: item.unit,
+            store_id: item.storeId,
+            stores: { name: item.storeName },
+          },
+        })) as CartRow[];
+      }
       const { data, error } = await supabase
         .from("cart_items")
-        .select("id, quantity, product_id, products(name, price, unit, store_id, stores(name))");
+        .select(
+          "id, quantity, product_id, selected_unit, unit_price, products(name, price, unit, store_id, stores(name))",
+        );
       if (error) throw error;
       return data as unknown as CartRow[];
     },
@@ -60,18 +89,47 @@ function CartPage() {
 
   useEffect(() => {
     if (addressLoaded) return;
-    supabase
-      .from("profiles")
-      .select("address")
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.address) setAddress(data.address);
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) {
+        const savedLocation = getSavedDeliveryLocation();
+        if (savedLocation?.address) {
+          setAddress(savedLocation.address);
+          if (savedLocation.latitude && savedLocation.longitude) {
+            setDeliveryLocation({
+              latitude: savedLocation.latitude,
+              longitude: savedLocation.longitude,
+              accuracy: savedLocation.accuracy ?? null,
+            });
+          }
+        }
         setAddressLoaded(true);
-      });
+        return;
+      }
+      supabase
+        .from("profiles")
+        .select("address")
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.address) setAddress(data.address);
+          setAddressLoaded(true);
+        });
+    });
   }, [addressLoaded]);
 
   const setQty = useMutation({
     mutationFn: async ({ id, quantity }: { id: string; quantity: number }) => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        const cart = getLocalCart();
+        const item = cart[id];
+        if (!item) return;
+        if (quantity <= 0) delete cart[id];
+        else cart[id] = { ...item, quantity };
+        setLocalCart(cart);
+        return;
+      }
       if (quantity <= 0) {
         await supabase.from("cart_items").delete().eq("id", id);
       } else {
@@ -85,7 +143,10 @@ function CartPage() {
     },
   });
 
-  const subtotal = items.reduce((sum, r) => sum + (r.products?.price ?? 0) * r.quantity, 0);
+  const subtotal = items.reduce(
+    (sum, r) => sum + Number(r.unit_price ?? r.products?.price ?? 0) * r.quantity,
+    0,
+  );
   const total = subtotal > 0 ? subtotal + DELIVERY_FEE : 0;
 
   const fetchDeliveryLocation = () =>
@@ -105,6 +166,12 @@ function CartPage() {
             accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
           };
           setDeliveryLocation(nextLocation);
+          saveDeliveryLocation({
+            address: address.trim() || "Current location",
+            latitude: nextLocation.latitude,
+            longitude: nextLocation.longitude,
+            accuracy: nextLocation.accuracy,
+          });
           setLocating(false);
           toast.success("Delivery location added");
           resolve(nextLocation);
@@ -122,6 +189,14 @@ function CartPage() {
 
   const checkout = useMutation({
     mutationFn: async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        if (address.trim()) saveDeliveryLocation({ address: address.trim() });
+        navigate({ to: "/auth/login", search: { redirectTo: "/cart" } });
+        throw new Error("Please login to place your order.");
+      }
       if (address.trim().length < 10) {
         throw new Error("Please add a complete delivery address before placing your order.");
       }
@@ -175,9 +250,11 @@ function CartPage() {
           <div key={r.id} className="flex items-center gap-3 rounded-2xl bg-card p-3.5 shadow-card">
             <div className="min-w-0 flex-1">
               <h3 className="truncate font-semibold">{r.products?.name}</h3>
-              <p className="text-xs text-muted-foreground">{r.products?.stores?.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {r.products?.stores?.name} · {r.selected_unit || r.products?.unit}
+              </p>
               <p className="mt-1 text-sm font-bold">
-                {formatINR((r.products?.price ?? 0) * r.quantity)}
+                {formatINR(Number(r.unit_price ?? r.products?.price ?? 0) * r.quantity)}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2 rounded-full bg-secondary px-1.5 py-1">

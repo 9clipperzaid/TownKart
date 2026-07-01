@@ -13,13 +13,23 @@ import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { z } from "zod";
+
+const loginSearchSchema = z.object({
+  redirectTo: z.string().optional(),
+});
+
+function safeRedirect(value: string | undefined) {
+  return value?.startsWith("/") ? value : "/home";
+}
 
 export const Route = createFileRoute("/auth/login")({
   ssr: false,
-  beforeLoad: async () => {
+  validateSearch: (search) => loginSearchSchema.parse(search),
+  beforeLoad: async ({ search }) => {
     const { data } = await supabase.auth.getUser();
     if (data.user) {
-      throw redirect({ to: "/home" });
+      throw redirect({ to: safeRedirect(search.redirectTo) });
     }
   },
   head: () => ({
@@ -55,6 +65,7 @@ function GoogleIcon() {
 }
 
 function LoginPage() {
+  const { redirectTo } = Route.useSearch();
   const [loading, setLoading] = useState(false);
   const [phone, setPhone] = useState("");
 
@@ -71,7 +82,7 @@ function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: `${window.location.origin}${safeRedirect(redirectTo)}`,
         },
       });
 
@@ -138,8 +149,8 @@ function LoginPage() {
                   placeholder="Enter your phone number"
                   value={phone}
                   onChange={(event) => {
-                    const val = event.target.value.replace(/\D/g, '').slice(0, 10)
-                    setPhone(val)
+                    const val = event.target.value.replace(/\D/g, "").slice(0, 10);
+                    setPhone(val);
                   }}
                   className="h-12 pl-9"
                   disabled={loading}

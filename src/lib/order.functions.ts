@@ -72,7 +72,7 @@ export const secureCheckout = createServerFn({ method: "POST" })
     const { data: rows, error } = await supabaseAdmin
       .from("cart_items")
       .select(
-        "id, quantity, product_id, products(id, name, price, discount_price, is_available, stock_quantity, store_id, stores(id, name, delivery_fee, min_order, is_active))",
+        "id, quantity, product_id, selected_unit, unit_price, products(id, name, price, discount_price, is_available, stock_quantity, store_id, stores(id, name, delivery_fee, min_order, is_active))",
       )
       .eq("user_id", userId);
     if (error) throw new Error("Could not load cart.");
@@ -131,7 +131,7 @@ export const secureCheckout = createServerFn({ method: "POST" })
       const store = firstProduct.stores!;
       const subtotal = items.reduce((sum, item) => {
         const p = item.products!;
-        return sum + Number(p.discount_price ?? p.price) * item.quantity;
+        return sum + Number(item.unit_price ?? p.discount_price ?? p.price) * item.quantity;
       }, 0);
       if (subtotal < Number(store.min_order ?? 0)) {
         throw new Error(`${store.name} has a minimum order of Rs ${store.min_order}.`);
@@ -168,9 +168,9 @@ export const secureCheckout = createServerFn({ method: "POST" })
         return {
           order_id: order.id,
           product_id: item.product_id,
-          name: p.name,
+          name: item.selected_unit ? `${p.name} (${item.selected_unit})` : p.name,
           quantity: item.quantity,
-          unit_price: Number(p.discount_price ?? p.price),
+          unit_price: Number(item.unit_price ?? p.discount_price ?? p.price),
         };
       });
       const { error: itemErr } = await supabaseAdmin.from("order_items").insert(orderItems);
