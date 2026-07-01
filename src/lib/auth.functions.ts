@@ -173,6 +173,9 @@ export const syncGoogleLoginProfile = createServerFn({ method: "POST" })
       .from("profiles")
       .update({ phone, is_verified: false })
       .eq("id", context.userId);
+    if (phoneError?.code === "23505") {
+      return { ok: true, phoneSaved: false, reason: "phone_in_use" as const };
+    }
     if (phoneError) throw new Error(phoneError.message);
 
     return { ok: true, phoneSaved: true, reason: null };

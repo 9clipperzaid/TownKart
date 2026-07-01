@@ -14,7 +14,6 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { FloatingContact } from "@/components/FloatingContact";
 import { supabase } from "@/integrations/supabase/client";
-import { syncGoogleProfile } from "@/lib/auth-profile";
 
 const SITE_URL = "https://www.townkart.store";
 const SITE_NAME = "TownKart";
@@ -173,24 +172,7 @@ function RootComponent() {
 
   useEffect(() => {
     try {
-      const { data } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
-          const provider = session?.user.app_metadata.provider;
-          const hasGoogleIdentity = session?.user.identities?.some(
-            (identity) => identity.provider === "google",
-          );
-          if ((provider === "google" || hasGoogleIdentity) && session?.user) {
-            void syncGoogleProfile(session.user)
-              .catch((error) => {
-                console.error("[Auth] Failed to sync Google profile", error);
-              })
-              .finally(() => {
-                router.invalidate();
-                queryClient.invalidateQueries();
-              });
-          }
-        }
-
+      const { data } = supabase.auth.onAuthStateChange((event) => {
         if (
           event !== "INITIAL_SESSION" &&
           event !== "SIGNED_IN" &&

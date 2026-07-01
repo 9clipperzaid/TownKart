@@ -15,7 +15,6 @@ import {
   Bike,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { isValidPhoneNumber, normalizePhoneNumber } from "@/lib/auth-profile";
 import { userErrorMessage } from "@/lib/utils";
 import { signOutClean } from "./route";
 import { Button } from "@/components/ui/button";
@@ -81,19 +80,11 @@ function ProfilePage() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
 
-      const normalizedPhone = phone.trim() ? normalizePhoneNumber(phone) : null;
-      if (phone.trim() && !isValidPhoneNumber(phone)) {
-        throw new Error("Enter a valid phone number");
-      }
-
-      const phoneChanged = normalizedPhone !== (profile?.phone ?? null);
       const { error } = await supabase
         .from("profiles")
         .update({
           full_name: fullName.trim() || null,
-          phone: normalizedPhone,
           address: address.trim() || null,
-          is_verified: phoneChanged ? false : profile?.is_verified,
         })
         .eq("id", user.id);
       if (error) throw error;
@@ -164,10 +155,13 @@ function ProfilePage() {
             type="tel"
             inputMode="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
             placeholder="98765 43210"
             className="h-12"
+            readOnly
           />
+          <p className="text-xs text-muted-foreground">
+            This is the number linked when you signed in.
+          </p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="email">

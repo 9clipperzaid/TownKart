@@ -1,5 +1,5 @@
 import { createFileRoute, redirect, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Phone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,6 +17,7 @@ import { z } from "zod";
 
 const loginSearchSchema = z.object({
   redirectTo: z.string().optional(),
+  error: z.enum(["phone_in_use"]).optional(),
 });
 
 function safeRedirect(value: string | undefined) {
@@ -65,9 +66,15 @@ function GoogleIcon() {
 }
 
 function LoginPage() {
-  const { redirectTo } = Route.useSearch();
+  const { redirectTo, error } = Route.useSearch();
   const [loading, setLoading] = useState(false);
   const [phone, setPhone] = useState("");
+
+  useEffect(() => {
+    if (error === "phone_in_use") {
+      toast.error("This phone number is already linked to another account.");
+    }
+  }, [error]);
 
   async function handleGoogleLogin() {
     if (!isValidPhoneNumber(phone)) {

@@ -55,10 +55,14 @@ function CustomerShell() {
 
     const pendingPhone = getPendingGooglePhone();
     void syncProfile({ data: { phone: pendingPhone } })
-      .then((result) => {
-        if (result.phoneSaved || result.reason !== "phone_in_use") {
+      .then(async (result) => {
+        if (result.reason === "phone_in_use") {
           clearPendingGooglePhone();
+          await supabase.auth.signOut();
+          window.location.assign("/auth/login?error=phone_in_use");
+          return;
         }
+        clearPendingGooglePhone();
       })
       .catch((error) => {
         console.error("[Auth] Failed to sync authenticated profile", error);
