@@ -278,7 +278,7 @@ function StorePage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
             {filtered.map((p, idx) => {
               const unitOptions = getUnitOptions(p);
               const selectedUnit = selectedUnits[p.id] ?? unitOptions[0]?.label ?? p.unit;
@@ -298,22 +298,22 @@ function StorePage() {
                     if (event.key === "Enter") setDetailProduct(p);
                   }}
                   className={cn(
-                    "group flex cursor-pointer flex-col rounded-2xl border border-border/70 bg-card p-2.5 transition",
+                    "group flex cursor-pointer flex-col rounded-xl border border-border/70 bg-card p-2 transition",
                     soldOut ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-pop",
                   )}
                 >
-                  <div className="relative mb-4">
+                  <div className="relative mb-3.5">
                     {p.image_url ? (
                       <img
                         src={p.image_url}
                         alt={p.name}
-                        className="aspect-square w-full rounded-xl object-cover"
+                        className="aspect-square w-full rounded-lg object-cover"
                         loading="lazy"
                       />
                     ) : (
                       <div
                         className={cn(
-                          "flex aspect-square items-center justify-center rounded-xl bg-gradient-to-br text-5xl",
+                          "flex aspect-square items-center justify-center rounded-lg bg-gradient-to-br text-4xl",
                           TILE_GRADIENTS[idx % TILE_GRADIENTS.length],
                         )}
                       >
@@ -392,12 +392,12 @@ function StorePage() {
                     </div>
                   </div>
 
-                  <p className="text-[11px] font-medium text-muted-foreground">{selectedUnit}</p>
-                  <h3 className="line-clamp-2 min-h-[2.25rem] text-sm font-semibold leading-snug">
+                  <p className="text-[10px] font-medium text-muted-foreground">{selectedUnit}</p>
+                  <h3 className="line-clamp-2 min-h-8 text-xs font-semibold leading-tight">
                     {p.name}
                   </h3>
                   {p.description && (
-                    <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                    <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
                       {p.description}
                     </p>
                   )}
@@ -423,7 +423,7 @@ function StorePage() {
                       ))}
                     </div>
                   )}
-                  <p className="mt-auto pt-1.5 text-sm font-extrabold">{formatINR(unitPrice)}</p>
+                  <p className="mt-auto pt-1.5 text-xs font-extrabold">{formatINR(unitPrice)}</p>
                 </div>
               );
             })}
@@ -448,32 +448,128 @@ function StorePage() {
       )}
 
       <Dialog open={!!detailProduct} onOpenChange={(open) => !open && setDetailProduct(null)}>
-        <DialogContent className="max-w-md">
-          {detailProduct && (
-            <>
-              <DialogHeader>
-                <DialogTitle>{detailProduct.name}</DialogTitle>
-              </DialogHeader>
-              {detailProduct.image_url ? (
-                <img
-                  src={detailProduct.image_url}
-                  alt={detailProduct.name}
-                  className="aspect-video w-full rounded-xl object-cover"
-                />
-              ) : (
-                <div className="flex aspect-video w-full items-center justify-center rounded-xl bg-secondary text-5xl">
-                  <span aria-hidden>{emoji}</span>
-                </div>
-              )}
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-muted-foreground">{detailProduct.unit}</p>
-                <p className="text-xl font-extrabold">{formatINR(Number(detailProduct.price))}</p>
-                <p className="whitespace-pre-line text-sm leading-6 text-muted-foreground">
-                  {detailProduct.description || "No description added yet."}
-                </p>
-              </div>
-            </>
-          )}
+        <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
+          {detailProduct &&
+            (() => {
+              const unitOptions = getUnitOptions(detailProduct);
+              const selectedUnit =
+                selectedUnits[detailProduct.id] ?? unitOptions[0]?.label ?? detailProduct.unit;
+              const selectedOption =
+                unitOptions.find((option) => option.label === selectedUnit) ?? unitOptions[0];
+              const unitPrice = Number(selectedOption?.unitPrice ?? detailProduct.price);
+              const qty = cart[`${detailProduct.id}::${selectedUnit}`] ?? 0;
+              const soldOut = !detailProduct.is_available;
+
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle>{detailProduct.name}</DialogTitle>
+                  </DialogHeader>
+                  {detailProduct.image_url ? (
+                    <img
+                      src={detailProduct.image_url}
+                      alt={detailProduct.name}
+                      className="aspect-video w-full rounded-xl object-cover"
+                    />
+                  ) : (
+                    <div className="flex aspect-video w-full items-center justify-center rounded-xl bg-secondary text-5xl">
+                      <span aria-hidden>{emoji}</span>
+                    </div>
+                  )}
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm font-semibold text-muted-foreground">{selectedUnit}</p>
+                      <p className="text-xl font-extrabold">{formatINR(unitPrice)}</p>
+                    </div>
+
+                    {unitOptions.length > 1 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-bold">Select unit</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {unitOptions.map((option) => (
+                            <button
+                              key={option.label}
+                              type="button"
+                              onClick={() =>
+                                setSelectedUnits((current) => ({
+                                  ...current,
+                                  [detailProduct.id]: option.label,
+                                }))
+                              }
+                              className={cn(
+                                "rounded-xl border px-3 py-2 text-left text-sm transition",
+                                option.label === selectedUnit
+                                  ? "border-primary bg-primary/10 text-primary"
+                                  : "border-border bg-background",
+                              )}
+                            >
+                              <span className="block font-bold">{option.label}</span>
+                              <span>{formatINR(Number(option.unitPrice))}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="whitespace-pre-line text-sm leading-6 text-muted-foreground">
+                      {detailProduct.description || "No description added yet."}
+                    </p>
+
+                    {soldOut ? (
+                      <Button disabled className="w-full">
+                        Sold out
+                      </Button>
+                    ) : qty === 0 ? (
+                      <Button
+                        className="w-full"
+                        onClick={() =>
+                          setQty.mutate({
+                            product: detailProduct,
+                            selectedUnit,
+                            unitPrice,
+                            quantity: 1,
+                          })
+                        }
+                      >
+                        Add to cart
+                      </Button>
+                    ) : (
+                      <div className="flex items-center justify-between rounded-xl bg-primary px-2 py-1 text-primary-foreground">
+                        <button
+                          type="button"
+                          className="flex h-9 w-9 items-center justify-center"
+                          onClick={() =>
+                            setQty.mutate({
+                              product: detailProduct,
+                              selectedUnit,
+                              unitPrice,
+                              quantity: qty - 1,
+                            })
+                          }
+                        >
+                          <Minus className="h-4 w-4" />
+                        </button>
+                        <span className="font-extrabold">{qty} in cart</span>
+                        <button
+                          type="button"
+                          className="flex h-9 w-9 items-center justify-center"
+                          onClick={() =>
+                            setQty.mutate({
+                              product: detailProduct,
+                              selectedUnit,
+                              unitPrice,
+                              quantity: qty + 1,
+                            })
+                          }
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
         </DialogContent>
       </Dialog>
     </div>

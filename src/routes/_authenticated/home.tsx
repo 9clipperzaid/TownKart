@@ -403,51 +403,6 @@ function HomePage() {
         </div>
       </section>
 
-      <section className="px-4 pt-5">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold">{query ? "Matching products" : "Popular products"}</h2>
-          <span className="text-xs font-semibold text-primary">{visibleProducts.length} items</span>
-        </div>
-        {visibleProducts.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            {query ? "No matching products found." : "No popular products selected yet."}
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {visibleProducts.map((product) => (
-              <button
-                key={product.id}
-                type="button"
-                onClick={() => setDetailProduct(product)}
-                className="rounded-2xl border border-border/70 bg-card p-2.5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-pop"
-              >
-                {product.image_url ? (
-                  <img
-                    src={product.image_url}
-                    alt={product.name}
-                    className="aspect-square w-full rounded-xl object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="flex aspect-square w-full items-center justify-center rounded-xl bg-secondary text-2xl font-extrabold text-primary">
-                    {categories.find((category) => category.key === product.category)?.emoji ??
-                      "TK"}
-                  </div>
-                )}
-                <p className="mt-2 text-[11px] font-medium text-muted-foreground">{product.unit}</p>
-                <h3 className="line-clamp-2 min-h-9 text-sm font-semibold leading-snug">
-                  {product.name}
-                </h3>
-                <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-                  {product.stores?.name ?? "TownKart store"}
-                </p>
-                <p className="mt-1 text-sm font-extrabold">{formatINR(Number(product.price))}</p>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
       <section className="px-4 pb-4 pt-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold">
@@ -465,15 +420,15 @@ function HomePage() {
         ) : filtered.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">No stores found.</p>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
             {filtered.map((store) => (
               <Link
                 key={store.id}
                 to="/store/$storeId"
                 params={{ storeId: store.id }}
-                className="group overflow-hidden rounded-2xl bg-card shadow-card transition-all duration-200 hover:-translate-y-1 hover:shadow-pop active:scale-[0.99]"
+                className="group overflow-hidden rounded-xl bg-card shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-pop active:scale-[0.99]"
               >
-                <div className="relative aspect-[4/3] overflow-hidden">
+                <div className="relative aspect-[16/9] overflow-hidden">
                   <img
                     src={store.banner_url || store.logo_url || categoryImage(store.category)}
                     alt={store.name}
@@ -482,28 +437,28 @@ function HomePage() {
                     height={512}
                     className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
-                  <span className="absolute left-2 top-2 rounded-full bg-background/90 px-2 py-1 text-xs font-bold text-foreground shadow-card">
+                  <span className="absolute left-2 top-2 rounded-full bg-background/90 px-2 py-0.5 text-[11px] font-bold text-foreground shadow-card">
                     {store.status === "suspended" ? "Closed" : "Open"}
                   </span>
                 </div>
-                <div className="p-3">
+                <div className="p-2.5">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="line-clamp-1 font-bold">{store.name}</h3>
-                    <span className="flex shrink-0 items-center gap-1 rounded-lg bg-success/15 px-1.5 py-0.5 text-xs font-bold text-success">
+                    <h3 className="line-clamp-1 text-sm font-bold">{store.name}</h3>
+                    <span className="flex shrink-0 items-center gap-1 rounded-lg bg-success/15 px-1.5 py-0.5 text-[11px] font-bold text-success">
                       <Star className="h-3 w-3 fill-current" />
                       {Number(store.rating).toFixed(1)}
                     </span>
                   </div>
-                  <p className="mt-0.5 line-clamp-2 min-h-10 text-sm text-muted-foreground">
+                  <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
                     {store.description}
                   </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                     <span className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" />
+                      <Clock className="h-3 w-3" />
                       {store.delivery_minutes} min
                     </span>
                     <span className="flex items-center gap-1">
-                      <Truck className="h-3.5 w-3.5" />
+                      <Truck className="h-3 w-3" />
                       {formatDelivery(store.delivery_fee)}
                     </span>
                     <span className="rounded-md bg-secondary px-1.5 py-0.5 font-medium text-secondary-foreground">
@@ -512,6 +467,53 @@ function HomePage() {
                   </div>
                 </div>
               </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="px-4 pb-4 pt-3">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold">{query ? "Matching products" : "Popular products"}</h2>
+          <span className="text-xs font-semibold text-primary">{visibleProducts.length} items</span>
+        </div>
+        {visibleProducts.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+            {query ? "No matching products found." : "No popular products selected yet."}
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+            {visibleProducts.map((product) => (
+              <button
+                key={product.id}
+                type="button"
+                onClick={() => setDetailProduct(product)}
+                className="rounded-xl border border-border/70 bg-card p-2 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-pop"
+              >
+                {product.image_url ? (
+                  <img
+                    src={product.image_url}
+                    alt={product.name}
+                    className="aspect-square w-full rounded-lg object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-secondary text-xl font-extrabold text-primary">
+                    {categories.find((category) => category.key === product.category)?.emoji ??
+                      "TK"}
+                  </div>
+                )}
+                <p className="mt-1.5 text-[10px] font-medium text-muted-foreground">
+                  {product.unit}
+                </p>
+                <h3 className="line-clamp-2 min-h-8 text-xs font-semibold leading-tight">
+                  {product.name}
+                </h3>
+                <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">
+                  {product.stores?.name ?? "TownKart store"}
+                </p>
+                <p className="mt-0.5 text-xs font-extrabold">{formatINR(Number(product.price))}</p>
+              </button>
             ))}
           </div>
         )}
