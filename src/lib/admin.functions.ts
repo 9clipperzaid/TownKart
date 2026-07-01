@@ -535,6 +535,8 @@ const productSchema = z.object({
   sku: z.string().trim().max(60).optional().nullable(),
   status: z.enum(["active", "inactive"]).default("active"),
   is_available: z.boolean().default(true),
+  is_popular: z.boolean().default(false),
+  popular_sort_order: z.number().int().min(0).max(1000000).default(100),
   has_unit_options: z.boolean().default(false),
   unit_options: z
     .array(

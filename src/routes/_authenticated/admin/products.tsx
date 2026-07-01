@@ -54,6 +54,8 @@ type ProductRow = {
   sku: string | null;
   status: string;
   is_available: boolean;
+  is_popular: boolean;
+  popular_sort_order: number;
   has_unit_options: boolean;
   unit_options: { label: string; unitPrice: number }[];
   price_updated_at: string;
@@ -74,6 +76,8 @@ type FormState = {
   sku: string;
   status: "active" | "inactive";
   is_available: boolean;
+  is_popular: boolean;
+  popular_sort_order: number;
   has_unit_options: boolean;
   unit_options: { label: string; unitPrice: number }[];
 };
@@ -91,6 +95,8 @@ type BulkImportProduct = {
   sku: string | null;
   status: "active" | "inactive";
   is_available: boolean;
+  is_popular: boolean;
+  popular_sort_order: number;
   has_unit_options: boolean;
   unit_options: { label: string; unitPrice: number }[];
 };
@@ -109,6 +115,8 @@ function emptyForm(storeId: string): FormState {
     sku: "",
     status: "active",
     is_available: true,
+    is_popular: false,
+    popular_sort_order: 100,
     has_unit_options: false,
     unit_options: [],
   };
@@ -180,6 +188,8 @@ function ProductsPage() {
           sku: f.sku || null,
           status: f.status,
           is_available: f.is_available,
+          is_popular: f.is_popular,
+          popular_sort_order: Number(f.popular_sort_order) || 100,
           has_unit_options: f.has_unit_options,
           unit_options: f.has_unit_options
             ? f.unit_options
@@ -221,7 +231,8 @@ function ProductsPage() {
   const filtered = products.filter((p) => !q || p.name.toLowerCase().includes(q.toLowerCase()));
 
   const canCreate = stores.length > 0;
-  const selectedImportStore = importStoreId || (storeFilter !== "all" ? storeFilter : stores[0]?.id);
+  const selectedImportStore =
+    importStoreId || (storeFilter !== "all" ? storeFilter : stores[0]?.id);
 
   function parseCsv(text: string) {
     const rows: string[][] = [];
@@ -280,7 +291,7 @@ function ProductsPage() {
     }
     const valueAt = (row: string[], name: string) => {
       const index = indexOf(name);
-      return index >= 0 ? row[index]?.trim() ?? "" : "";
+      return index >= 0 ? (row[index]?.trim() ?? "") : "";
     };
 
     const imported: BulkImportProduct[] = rows.slice(1).map((row, rowIndex) => {
@@ -313,6 +324,8 @@ function ProductsPage() {
         sku: valueAt(row, "sku") || null,
         status,
         is_available: status === "active" && toBool(valueAt(row, "is_available"), true),
+        is_popular: false,
+        popular_sort_order: 100,
         has_unit_options: false,
         unit_options: [],
       };
@@ -404,6 +417,7 @@ function ProductsPage() {
                 <th className="px-4 py-3">Store</th>
                 <th className="px-4 py-3">Price</th>
                 <th className="px-4 py-3">Stock</th>
+                <th className="px-4 py-3">Popular</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -428,6 +442,15 @@ function ProductsPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">{p.stock_quantity}</td>
+                  <td className="px-4 py-3">
+                    {p.is_popular ? (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                        #{p.popular_sort_order}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">No</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span
                       className={
@@ -463,6 +486,8 @@ function ProductsPage() {
                             sku: p.sku ?? "",
                             status: (p.status as FormState["status"]) ?? "active",
                             is_available: p.is_available,
+                            is_popular: Boolean(p.is_popular),
+                            popular_sort_order: Number(p.popular_sort_order ?? 100),
                             has_unit_options: Boolean(p.has_unit_options),
                             unit_options: Array.isArray(p.unit_options) ? p.unit_options : [],
                           })
@@ -485,7 +510,7 @@ function ProductsPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
                     No products found.
                   </td>
                 </tr>
@@ -541,6 +566,33 @@ function ProductsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="space-y-3 rounded-xl border border-border/60 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <Label>Show in popular products</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Turn on to show this product on the home page popular section.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={form.is_popular}
+                    onCheckedChange={(value) => setForm({ ...form, is_popular: value })}
+                  />
+                </div>
+                {form.is_popular && (
+                  <div className="space-y-1.5">
+                    <Label>Popular order</Label>
+                    <Input
+                      type="number"
+                      value={form.popular_sort_order}
+                      onChange={(event) =>
+                        setForm({ ...form, popular_sort_order: Number(event.target.value) })
+                      }
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="space-y-3 rounded-xl border border-border/60 p-3">
