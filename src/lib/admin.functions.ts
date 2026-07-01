@@ -244,6 +244,65 @@ export const adminSaveCallOrderSettings = createServerFn({ method: "POST" })
 // Order and user detail
 // ---------------------------------------------------------------------------
 
+export const adminListOrdersReport = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { from?: string; to?: string }) =>
+    z
+      .object({
+        from: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        to: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+      })
+      .refine((value) => !value.from || !value.to || value.from <= value.to, {
+        message: "From date must be before the to date.",
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const supabaseAdmin = await getAdmin();
+    const exclusiveEnd = data.to ? new Date(`${data.to}T00:00:00+05:30`) : null;
+    exclusiveEnd?.setDate(exclusiveEnd.getDate() + 1);
+    const fetchPage = (start: number, end: number) => {
+      let query = supabaseAdmin
+        .from("orders")
+        .select("*, order_items(name, quantity, unit_price)")
+        .order("created_at", { ascending: false });
+      if (data.from) query = query.gte("created_at", `${data.from}T00:00:00+05:30`);
+      if (exclusiveEnd) query = query.lt("created_at", exclusiveEnd.toISOString());
+      return query.range(start, end);
+    };
+
+    const pageSize = 1000;
+    const firstPage = await fetchPage(0, pageSize - 1);
+    if (firstPage.error) throw new Error(firstPage.error.message);
+    const orders = firstPage.data ?? [];
+    while (orders.length > 0 && orders.length % pageSize === 0) {
+      const nextPage = await fetchPage(orders.length, orders.length + pageSize - 1);
+      if (nextPage.error) throw new Error(nextPage.error.message);
+      orders.push(...(nextPage.data ?? []));
+      if ((nextPage.data?.length ?? 0) < pageSize) break;
+    }
+
+    const customerIds = [...new Set(orders.map((order) => order.customer_id))];
+    const { data: profiles } = customerIds.length
+      ? await supabaseAdmin
+          .from("profiles")
+          .select("id, full_name, phone, email")
+          .in("id", customerIds)
+      : { data: [] };
+    const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+    return orders.map((order) => ({
+      ...order,
+      profiles: profileMap.get(order.customer_id) ?? null,
+    }));
+  });
+
 export const adminGetOrderDetail = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { orderId: string }) => z.object({ orderId: z.string().uuid() }).parse(d))
@@ -606,7 +665,10 @@ export const adminSaveProduct = createServerFn({ method: "POST" })
   });
 
 const bulkProductSchema = z.object({
-  products: z.array(productSchema.omit({ id: true })).min(1).max(500),
+  products: z
+    .array(productSchema.omit({ id: true }))
+    .min(1)
+    .max(500),
 });
 
 export const adminBulkImportProducts = createServerFn({ method: "POST" })

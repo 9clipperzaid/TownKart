@@ -12,10 +12,11 @@ import {
   Search,
   MapPin,
   Navigation,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
-import { adminGetOrderDetail } from "@/lib/admin.functions";
-import { listOperationalOrders, updateOrderStatus } from "@/lib/order.functions";
+import { adminGetOrderDetail, adminListOrdersReport } from "@/lib/admin.functions";
+import { updateOrderStatus } from "@/lib/order.functions";
 import { formatINR } from "@/lib/format";
 import { userErrorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,7 @@ type OrderRow = {
   created_at: string;
   tracking_code: string | null;
   customer_id?: string;
+  profiles?: { full_name: string | null; phone: string | null; email: string | null } | null;
   order_items: { name: string; quantity: number; unit_price: number }[];
 };
 
@@ -71,16 +73,21 @@ function AdminOrdersPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const searchParams = Route.useSearch();
-  const list = useServerFn(listOperationalOrders);
+  const list = useServerFn(adminListOrdersReport);
   const updateStatus = useServerFn(updateOrderStatus);
   const getDetail = useServerFn(adminGetOrderDetail);
   const [q, setQ] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(searchParams.orderId ?? null);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   const { data: orders = [], isLoading } = useQuery({
-    queryKey: ["operational-orders"],
-    queryFn: () => list() as Promise<OrderRow[]>,
+    queryKey: ["operational-orders", fromDate, toDate],
+    queryFn: () =>
+      list({ data: { from: fromDate || undefined, to: toDate || undefined } }) as Promise<
+        OrderRow[]
+      >,
     refetchInterval: 15000,
   });
 
@@ -114,6 +121,9 @@ function AdminOrdersPage() {
         o.tracking_code,
         o.store_name,
         o.address,
+        o.profiles?.full_name,
+        o.profiles?.phone,
+        o.profiles?.email,
         ...(o.order_items ?? []).map((item) => item.name),
       ]
         .filter(Boolean)
@@ -128,6 +138,63 @@ function AdminOrdersPage() {
     orders: filteredOrders.filter((o) => o.status === status.key),
   }));
 
+  const rangeRevenue = filteredOrders.reduce((sum, order) => sum + Number(order.total), 0);
+  const deliveredRevenue = filteredOrders
+    .filter((order) => order.status === "delivered")
+    .reduce((sum, order) => sum + Number(order.total), 0);
+
+  function setMonth(offset: number) {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0);
+    const localDate = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+    setFromDate(localDate(start));
+    setToDate(localDate(end));
+  }
+
+  function exportCsv() {
+    const quote = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+    const rows = filteredOrders.map((order) => [
+      order.tracking_code ?? order.id,
+      new Date(order.created_at).toLocaleString("en-IN"),
+      order.profiles?.full_name ?? "Customer",
+      order.profiles?.phone ?? "",
+      order.profiles?.email ?? "",
+      order.store_name,
+      order.status,
+      order.payment_method ?? "",
+      order.payment_status ?? "",
+      order.order_items.map((item) => `${item.quantity}x ${item.name}`).join("; "),
+      order.address,
+      order.total,
+    ]);
+    const header = [
+      "Order ID",
+      "Date",
+      "Customer",
+      "Phone",
+      "Email",
+      "Store",
+      "Status",
+      "Payment Method",
+      "Payment Status",
+      "Items",
+      "Address",
+      "Total",
+    ];
+    const csv = [header, ...rows].map((row) => row.map(quote).join(",")).join("\r\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+    link.download = `townkart-orders-${fromDate || "all"}-to-${toDate || "today"}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -137,14 +204,69 @@ function AdminOrdersPage() {
         </p>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search order ID, customer, phone or address"
-          className="pl-9"
-        />
+      <div className="space-y-3 rounded-xl border border-border/60 bg-card p-4 shadow-card">
+        <div className="flex flex-wrap items-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setFromDate("");
+              setToDate("");
+            }}
+          >
+            All time
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setMonth(0)}>
+            This month
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setMonth(-1)}>
+            Previous month
+          </Button>
+          <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+            From
+            <Input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="h-9"
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+            To
+            <Input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="h-9"
+            />
+          </label>
+          <Button size="sm" onClick={exportCsv} disabled={!filteredOrders.length}>
+            <Download className="h-4 w-4" /> Export CSV
+          </Button>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <div className="rounded-lg bg-muted/50 p-3">
+            <p className="text-xs text-muted-foreground">Orders in range</p>
+            <p className="text-xl font-bold">{filteredOrders.length}</p>
+          </div>
+          <div className="rounded-lg bg-muted/50 p-3">
+            <p className="text-xs text-muted-foreground">Order value</p>
+            <p className="text-xl font-bold">{formatINR(rangeRevenue)}</p>
+          </div>
+          <div className="rounded-lg bg-muted/50 p-3">
+            <p className="text-xs text-muted-foreground">Delivered revenue</p>
+            <p className="text-xl font-bold">{formatINR(deliveredRevenue)}</p>
+          </div>
+        </div>
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search order, customer, phone or address"
+            className="pl-9"
+          />
+        </div>
       </div>
 
       {isLoading ? (
@@ -306,7 +428,8 @@ function AdminOrdersPage() {
                       </p>
                       {selectedOrder.delivery_location_accuracy != null && (
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Accuracy about {Math.round(Number(selectedOrder.delivery_location_accuracy))}m
+                          Accuracy about{" "}
+                          {Math.round(Number(selectedOrder.delivery_location_accuracy))}m
                         </p>
                       )}
                       <Button asChild size="sm" variant="outline" className="mt-3 h-8">
