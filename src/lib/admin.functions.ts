@@ -1063,7 +1063,17 @@ const homeBannerSchema = z.object({
 
 const homeBannersSchema = z.object({
   banners: z.array(homeBannerSchema).max(20),
+  default_banner_enabled: z.boolean().optional(),
 });
+
+const defaultHomeBanner = {
+  id: "default-townkart",
+  title: "Groceries, food, medicines and local essentials delivered fast.",
+  subtitle: "Nehtaur's First Online Kart",
+  image_url: null,
+  is_enabled: true,
+  sort_order: 1,
+};
 
 export const getSupportSettings = createServerFn({ method: "GET" }).handler(async () => {
   const supabaseAdmin = await getAdmin();
@@ -1187,7 +1197,20 @@ export const getHomeBanners = createServerFn({ method: "GET" }).handler(async ()
     .eq("key", "home_banners")
     .maybeSingle();
   const parsed = homeBannersSchema.safeParse(data?.value);
-  return parsed.success ? parsed.data.banners : [];
+  if (!parsed.success) return [defaultHomeBanner];
+
+  const banners = parsed.data.banners;
+  const hasDefaultBanner = banners.some((banner) => banner.id === defaultHomeBanner.id);
+  const isLegacyValue = parsed.data.default_banner_enabled === undefined;
+
+  if (isLegacyValue && !hasDefaultBanner) {
+    return [
+      defaultHomeBanner,
+      ...banners.map((banner) => ({ ...banner, sort_order: banner.sort_order + 1 })),
+    ];
+  }
+
+  return banners;
 });
 
 export const adminSaveHomeBanners = createServerFn({ method: "POST" })
@@ -1200,9 +1223,10 @@ export const adminSaveHomeBanners = createServerFn({ method: "POST" })
     const banners = data.banners
       .map((banner, index) => ({ ...banner, sort_order: banner.sort_order ?? index }))
       .sort((a, b) => a.sort_order - b.sort_order);
+    const defaultBannerEnabled = banners.some((banner) => banner.id === defaultHomeBanner.id);
     const { error } = await db.from("marketplace_settings").upsert({
       key: "home_banners",
-      value: { banners },
+      value: { banners, default_banner_enabled: defaultBannerEnabled },
       updated_at: new Date().toISOString(),
     });
     if (error) throw new Error(error.message);

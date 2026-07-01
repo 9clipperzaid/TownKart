@@ -135,7 +135,7 @@ function SettingsPage() {
         data: {
           banners: banners.map((banner, index) => ({
             ...banner,
-            sort_order: index + 1,
+            sort_order: Number.isFinite(banner.sort_order) ? banner.sort_order : index + 1,
             subtitle: banner.subtitle || null,
             image_url: banner.image_url || null,
           })),
@@ -182,6 +182,7 @@ function SettingsPage() {
   });
 
   function addBanner() {
+    const nextSortOrder = banners.reduce((max, banner) => Math.max(max, banner.sort_order), 0) + 1;
     setBanners((current) => [
       ...current,
       {
@@ -190,7 +191,7 @@ function SettingsPage() {
         subtitle: "Nehtaur's First Online Kart",
         image_url: "",
         is_enabled: true,
-        sort_order: current.length + 1,
+        sort_order: nextSortOrder,
       },
     ]);
   }
@@ -322,7 +323,7 @@ function SettingsPage() {
           <div>
             <h2 className="text-lg font-bold">Home moving banners</h2>
             <p className="text-sm text-muted-foreground">
-              Add image banners that rotate after the default TownKart banner.
+              Control every home banner, including the default TownKart banner order and visibility.
             </p>
           </div>
           <Button type="button" variant="outline" onClick={addBanner}>
@@ -333,14 +334,19 @@ function SettingsPage() {
 
         {banners.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
-            No extra banners yet. The default TownKart banner will still show.
+            No banners are active in this list. Add one or save the default banner again.
           </div>
         ) : (
           <div className="space-y-4">
             {banners.map((banner, index) => (
               <div key={banner.id} className="space-y-4 rounded-xl border border-border p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-bold">Banner {index + 1}</div>
+                  <div>
+                    <div className="text-sm font-bold">Banner {index + 1}</div>
+                    {banner.id === "default-townkart" && (
+                      <p className="text-xs text-muted-foreground">Default TownKart banner</p>
+                    )}
+                  </div>
                   <div className="flex items-center gap-3">
                     <Label className="flex items-center gap-2 text-sm">
                       <Switch
@@ -362,13 +368,30 @@ function SettingsPage() {
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-[1fr_1.2fr]">
-                  <ImageUpload
-                    label="Banner image"
-                    bucket="marketplace-banners"
-                    value={banner.image_url}
-                    onChange={(image_url) => updateBanner(index, { image_url })}
-                  />
+                  {banner.id === "default-townkart" ? (
+                    <div className="flex min-h-40 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 p-4 text-center text-sm font-medium text-muted-foreground">
+                      Built-in TownKart visual
+                    </div>
+                  ) : (
+                    <ImageUpload
+                      label="Banner image"
+                      bucket="marketplace-banners"
+                      value={banner.image_url}
+                      onChange={(image_url) => updateBanner(index, { image_url })}
+                    />
+                  )}
                   <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label>Order number</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={banner.sort_order}
+                        onChange={(e) =>
+                          updateBanner(index, { sort_order: Number(e.target.value) || 1 })
+                        }
+                      />
+                    </div>
                     <div className="space-y-1.5">
                       <Label>Title</Label>
                       <Input

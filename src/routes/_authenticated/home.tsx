@@ -102,19 +102,10 @@ function HomePage() {
   });
 
   const heroBanners = useMemo<HomeBanner[]>(
-    () => [
-      {
-        id: "default-townkart",
-        title: "Groceries, food, medicines and local essentials delivered fast.",
-        subtitle: "Nehtaur's First Online Kart",
-        image_url: null,
-        is_enabled: true,
-        sort_order: 0,
-      },
-      ...adminBanners
+    () =>
+      adminBanners
         .filter((banner) => banner.is_enabled)
         .sort((a, b) => a.sort_order - b.sort_order),
-    ],
     [adminBanners],
   );
 
