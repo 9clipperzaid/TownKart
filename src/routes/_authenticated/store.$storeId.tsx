@@ -278,7 +278,7 @@ function StorePage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-9">
             {filtered.map((p, idx) => {
               const unitOptions = getUnitOptions(p);
               const selectedUnit = selectedUnits[p.id] ?? unitOptions[0]?.label ?? p.unit;
@@ -298,22 +298,22 @@ function StorePage() {
                     if (event.key === "Enter") setDetailProduct(p);
                   }}
                   className={cn(
-                    "group flex cursor-pointer flex-col rounded-xl border border-border/70 bg-card p-2 transition",
+                    "group flex cursor-pointer flex-col rounded-lg border border-border/70 bg-card p-1.5 transition",
                     soldOut ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-pop",
                   )}
                 >
-                  <div className="relative mb-3.5">
+                  <div className="relative mb-3">
                     {p.image_url ? (
                       <img
                         src={p.image_url}
                         alt={p.name}
-                        className="aspect-square w-full rounded-lg object-cover"
+                        className="aspect-square w-full rounded-md object-cover"
                         loading="lazy"
                       />
                     ) : (
                       <div
                         className={cn(
-                          "flex aspect-square items-center justify-center rounded-lg bg-gradient-to-br text-4xl",
+                          "flex aspect-square items-center justify-center rounded-md bg-gradient-to-br text-3xl",
                           TILE_GRADIENTS[idx % TILE_GRADIENTS.length],
                         )}
                       >
@@ -322,10 +322,10 @@ function StorePage() {
                     )}
 
                     {store && !soldOut && (
-                      <span className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-md bg-background/85 px-1.5 py-0.5 text-[10px] font-bold text-foreground backdrop-blur">
-                        <Clock className="h-3 w-3 text-primary" />
-                        {store.delivery_minutes} min
-                      </span>
+                        <span className="absolute left-1 top-1 flex items-center gap-1 rounded-md bg-background/85 px-1.5 py-0.5 text-[9px] font-bold text-foreground backdrop-blur">
+                          <Clock className="h-3 w-3 text-primary" />
+                          {store.delivery_minutes} min
+                        </span>
                     )}
                     {soldOut && (
                       <span className="absolute left-1.5 top-1.5 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[10px] font-bold text-background">
@@ -333,7 +333,7 @@ function StorePage() {
                       </span>
                     )}
 
-                    <div className="absolute -bottom-3 right-1.5">
+                    <div className="absolute -bottom-3 right-1">
                       {soldOut ? (
                         <span className="inline-flex h-8 items-center rounded-lg border border-border bg-muted px-3 text-xs font-bold text-muted-foreground">
                           N/A
@@ -350,7 +350,7 @@ function StorePage() {
                               quantity: 1,
                             });
                           }}
-                          className="inline-flex h-8 items-center rounded-lg border-2 border-primary bg-background px-4 text-xs font-extrabold uppercase tracking-wide text-primary shadow-card transition active:scale-95"
+                          className="inline-flex h-7 items-center rounded-lg border-2 border-primary bg-background px-3 text-[11px] font-extrabold uppercase tracking-wide text-primary shadow-card transition active:scale-95"
                         >
                           Add
                         </button>
@@ -392,15 +392,10 @@ function StorePage() {
                     </div>
                   </div>
 
-                  <p className="text-[10px] font-medium text-muted-foreground">{selectedUnit}</p>
-                  <h3 className="line-clamp-2 min-h-8 text-xs font-semibold leading-tight">
+                  <p className="text-[9px] font-medium text-muted-foreground">{selectedUnit}</p>
+                  <h3 className="line-clamp-2 min-h-7 text-[11px] font-semibold leading-tight">
                     {p.name}
                   </h3>
-                  {p.description && (
-                    <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
-                      {p.description}
-                    </p>
-                  )}
                   {unitOptions.length > 1 && (
                     <div className="mt-2 grid grid-cols-2 gap-1">
                       {unitOptions.map((option) => (
@@ -423,7 +418,7 @@ function StorePage() {
                       ))}
                     </div>
                   )}
-                  <p className="mt-auto pt-1.5 text-xs font-extrabold">{formatINR(unitPrice)}</p>
+                  <p className="mt-auto pt-1 text-xs font-extrabold">{formatINR(unitPrice)}</p>
                 </div>
               );
             })}
