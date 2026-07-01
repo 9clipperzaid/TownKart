@@ -207,15 +207,12 @@ function HomePage() {
                 )}
               >
                 {banner.image_url && (
-                  <>
-                    <img
-                      src={banner.image_url}
-                      alt={banner.title}
-                      className="h-full w-full object-cover"
-                      loading={index === 0 ? "eager" : "lazy"}
-                    />
-                    <div className="absolute inset-0 bg-foreground/45" />
-                  </>
+                  <img
+                    src={banner.image_url}
+                    alt={banner.title}
+                    className="h-full w-full object-cover"
+                    loading={index === 0 ? "eager" : "lazy"}
+                  />
                 )}
               </div>
             ))}
