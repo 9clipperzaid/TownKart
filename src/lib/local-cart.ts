@@ -31,13 +31,20 @@ function cartKey(productId: string, selectedUnit: string) {
   return `${productId}::${selectedUnit}`;
 }
 
-export function getUnitOptions(product: { price: number; unit?: string | null }): UnitOption[] {
-  const unit = (product.unit ?? "").toLowerCase();
-  if (unit.includes("kg") || unit.includes("g")) {
-    return [
-      { label: "500 g", unitPrice: Math.round(Number(product.price) * 0.5) },
-      { label: "1 kg", unitPrice: Number(product.price) },
-    ];
+export function getUnitOptions(product: {
+  price: number;
+  unit?: string | null;
+  has_unit_options?: boolean | null;
+  unit_options?: UnitOption[] | null;
+}): UnitOption[] {
+  if (
+    product.has_unit_options &&
+    Array.isArray(product.unit_options) &&
+    product.unit_options.length
+  ) {
+    return product.unit_options
+      .filter((option) => option.label && Number.isFinite(Number(option.unitPrice)))
+      .map((option) => ({ label: option.label, unitPrice: Number(option.unitPrice) }));
   }
   return [{ label: product.unit || "1 pc", unitPrice: Number(product.price) }];
 }

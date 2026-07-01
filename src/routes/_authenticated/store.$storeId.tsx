@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { cn, userErrorMessage } from "@/lib/utils";
 import { CallToOrder } from "@/components/CallToOrder";
 import { getLocalCart, getUnitOptions, updateLocalCartItem } from "@/lib/local-cart";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/store/$storeId")({
   component: StorePage,
@@ -23,6 +24,8 @@ type Product = {
   image_url: string | null;
   price: number;
   unit: string;
+  has_unit_options: boolean;
+  unit_options: { label: string; unitPrice: number }[] | null;
   is_available: boolean;
 };
 
@@ -40,6 +43,7 @@ function StorePage() {
   const [search, setSearch] = useState("");
   const [availableOnly, setAvailableOnly] = useState(false);
   const [selectedUnits, setSelectedUnits] = useState<Record<string, string>>({});
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
 
   const { data: store } = useQuery({
     queryKey: ["store", storeId],
@@ -287,8 +291,14 @@ function StorePage() {
               return (
                 <div
                   key={p.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetailProduct(p)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") setDetailProduct(p);
+                  }}
                   className={cn(
-                    "group flex flex-col rounded-2xl border border-border/70 bg-card p-2.5 transition",
+                    "group flex cursor-pointer flex-col rounded-2xl border border-border/70 bg-card p-2.5 transition",
                     soldOut ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-pop",
                   )}
                 >
@@ -330,14 +340,16 @@ function StorePage() {
                         </span>
                       ) : qty === 0 ? (
                         <button
-                          onClick={() =>
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
                             setQty.mutate({
                               product: p,
                               selectedUnit,
                               unitPrice,
                               quantity: 1,
-                            })
-                          }
+                            });
+                          }}
                           className="inline-flex h-8 items-center rounded-lg border-2 border-primary bg-background px-4 text-xs font-extrabold uppercase tracking-wide text-primary shadow-card transition active:scale-95"
                         >
                           Add
@@ -345,29 +357,33 @@ function StorePage() {
                       ) : (
                         <div className="flex h-8 items-center gap-1 rounded-lg bg-primary px-1 text-primary-foreground shadow-card">
                           <button
+                            type="button"
                             className="flex h-7 w-6 items-center justify-center"
-                            onClick={() =>
+                            onClick={(event) => {
+                              event.stopPropagation();
                               setQty.mutate({
                                 product: p,
                                 selectedUnit,
                                 unitPrice,
                                 quantity: qty - 1,
-                              })
-                            }
+                              });
+                            }}
                           >
                             <Minus className="h-3.5 w-3.5" />
                           </button>
                           <span className="min-w-4 text-center text-xs font-bold">{qty}</span>
                           <button
+                            type="button"
                             className="flex h-7 w-6 items-center justify-center"
-                            onClick={() =>
+                            onClick={(event) => {
+                              event.stopPropagation();
                               setQty.mutate({
                                 product: p,
                                 selectedUnit,
                                 unitPrice,
                                 quantity: qty + 1,
-                              })
-                            }
+                              });
+                            }}
                           >
                             <Plus className="h-3.5 w-3.5" />
                           </button>
@@ -391,9 +407,10 @@ function StorePage() {
                         <button
                           key={option.label}
                           type="button"
-                          onClick={() =>
-                            setSelectedUnits((current) => ({ ...current, [p.id]: option.label }))
-                          }
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedUnits((current) => ({ ...current, [p.id]: option.label }));
+                          }}
                           className={cn(
                             "rounded-lg border px-2 py-1 text-[10px] font-bold transition",
                             option.label === selectedUnit
@@ -429,6 +446,36 @@ function StorePage() {
           </Button>
         </div>
       )}
+
+      <Dialog open={!!detailProduct} onOpenChange={(open) => !open && setDetailProduct(null)}>
+        <DialogContent className="max-w-md">
+          {detailProduct && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{detailProduct.name}</DialogTitle>
+              </DialogHeader>
+              {detailProduct.image_url ? (
+                <img
+                  src={detailProduct.image_url}
+                  alt={detailProduct.name}
+                  className="aspect-video w-full rounded-xl object-cover"
+                />
+              ) : (
+                <div className="flex aspect-video w-full items-center justify-center rounded-xl bg-secondary text-5xl">
+                  <span aria-hidden>{emoji}</span>
+                </div>
+              )}
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-muted-foreground">{detailProduct.unit}</p>
+                <p className="text-xl font-extrabold">{formatINR(Number(detailProduct.price))}</p>
+                <p className="whitespace-pre-line text-sm leading-6 text-muted-foreground">
+                  {detailProduct.description || "No description added yet."}
+                </p>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

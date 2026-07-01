@@ -535,6 +535,16 @@ const productSchema = z.object({
   sku: z.string().trim().max(60).optional().nullable(),
   status: z.enum(["active", "inactive"]).default("active"),
   is_available: z.boolean().default(true),
+  has_unit_options: z.boolean().default(false),
+  unit_options: z
+    .array(
+      z.object({
+        label: z.string().trim().min(1).max(40),
+        unitPrice: z.number().min(0).max(1000000),
+      }),
+    )
+    .max(12)
+    .default([]),
 });
 
 export const adminSaveProduct = createServerFn({ method: "POST" })
@@ -548,6 +558,7 @@ export const adminSaveProduct = createServerFn({ method: "POST" })
       ...rest,
       discount_price: data.discount_price ?? null,
       is_available: data.status === "active" && data.is_available,
+      unit_options: data.has_unit_options ? data.unit_options : [],
     };
 
     if (id) {

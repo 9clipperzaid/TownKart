@@ -54,6 +54,8 @@ type ProductRow = {
   sku: string | null;
   status: string;
   is_available: boolean;
+  has_unit_options: boolean;
+  unit_options: { label: string; unitPrice: number }[];
   price_updated_at: string;
   stores: { name: string } | null;
 };
@@ -72,6 +74,8 @@ type FormState = {
   sku: string;
   status: "active" | "inactive";
   is_available: boolean;
+  has_unit_options: boolean;
+  unit_options: { label: string; unitPrice: number }[];
 };
 
 type BulkImportProduct = {
@@ -87,6 +91,8 @@ type BulkImportProduct = {
   sku: string | null;
   status: "active" | "inactive";
   is_available: boolean;
+  has_unit_options: boolean;
+  unit_options: { label: string; unitPrice: number }[];
 };
 
 function emptyForm(storeId: string): FormState {
@@ -103,6 +109,8 @@ function emptyForm(storeId: string): FormState {
     sku: "",
     status: "active",
     is_available: true,
+    has_unit_options: false,
+    unit_options: [],
   };
 }
 
@@ -172,6 +180,15 @@ function ProductsPage() {
           sku: f.sku || null,
           status: f.status,
           is_available: f.is_available,
+          has_unit_options: f.has_unit_options,
+          unit_options: f.has_unit_options
+            ? f.unit_options
+                .filter((option) => option.label.trim() && Number(option.unitPrice) >= 0)
+                .map((option) => ({
+                  label: option.label.trim(),
+                  unitPrice: Number(option.unitPrice),
+                }))
+            : [],
         },
       }),
     onSuccess: () => {
@@ -296,6 +313,8 @@ function ProductsPage() {
         sku: valueAt(row, "sku") || null,
         status,
         is_available: status === "active" && toBool(valueAt(row, "is_available"), true),
+        has_unit_options: false,
+        unit_options: [],
       };
     });
 
@@ -314,8 +333,6 @@ function ProductsPage() {
     link.click();
     URL.revokeObjectURL(url);
   }
-
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
@@ -446,6 +463,8 @@ function ProductsPage() {
                             sku: p.sku ?? "",
                             status: (p.status as FormState["status"]) ?? "active",
                             is_available: p.is_available,
+                            has_unit_options: Boolean(p.has_unit_options),
+                            unit_options: Array.isArray(p.unit_options) ? p.unit_options : [],
                           })
                         }
                       >
@@ -522,6 +541,95 @@ function ProductsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="space-y-3 rounded-xl border border-border/60 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <Label>Unit/price options</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Enable only for products that need choices like half kg / full kg.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={form.has_unit_options}
+                    onCheckedChange={(value) =>
+                      setForm({
+                        ...form,
+                        has_unit_options: value,
+                        unit_options:
+                          value && form.unit_options.length === 0
+                            ? [
+                                {
+                                  label: "0.5 kg",
+                                  unitPrice: Math.round(Number(form.price) * 0.5),
+                                },
+                                { label: "1 kg", unitPrice: Number(form.price) },
+                              ]
+                            : form.unit_options,
+                      })
+                    }
+                  />
+                </div>
+
+                {form.has_unit_options && (
+                  <div className="space-y-2">
+                    {form.unit_options.map((option, index) => (
+                      <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                        <Input
+                          value={option.label}
+                          placeholder="0.5 kg"
+                          onChange={(event) => {
+                            const next = [...form.unit_options];
+                            next[index] = { ...option, label: event.target.value };
+                            setForm({ ...form, unit_options: next });
+                          }}
+                        />
+                        <Input
+                          type="number"
+                          value={option.unitPrice}
+                          placeholder="Price"
+                          onChange={(event) => {
+                            const next = [...form.unit_options];
+                            next[index] = { ...option, unitPrice: Number(event.target.value) };
+                            setForm({ ...form, unit_options: next });
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              unit_options: form.unit_options.filter(
+                                (_, current) => current !== index,
+                              ),
+                            })
+                          }
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          unit_options: [
+                            ...form.unit_options,
+                            { label: form.unit || "1 unit", unitPrice: Number(form.price) || 0 },
+                          ],
+                        })
+                      }
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add option
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1.5">
