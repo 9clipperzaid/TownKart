@@ -706,6 +706,32 @@ export const adminDeleteProduct = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const adminUpdateProductPopularity = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        is_popular: z.boolean(),
+        popular_sort_order: z.number().int().min(0).max(1000000).default(100),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const supabaseAdmin = await getAdmin();
+    const { error } = await supabaseAdmin
+      .from("products")
+      .update({
+        is_popular: data.is_popular,
+        popular_sort_order: data.popular_sort_order,
+      })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await logAction(context.userId, "update_popular", "product", data.id, data);
+    return { ok: true };
+  });
+
 // ---------------------------------------------------------------------------
 // Dynamic pricing
 // ---------------------------------------------------------------------------

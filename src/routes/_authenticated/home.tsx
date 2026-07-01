@@ -420,15 +420,15 @@ function HomePage() {
         ) : filtered.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">No stores found.</p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="grid gap-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
             {filtered.map((store) => (
               <Link
                 key={store.id}
                 to="/store/$storeId"
                 params={{ storeId: store.id }}
-                className="group overflow-hidden rounded-xl bg-card shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-pop active:scale-[0.99]"
+                className="group overflow-hidden rounded-lg bg-card shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-pop active:scale-[0.99]"
               >
-                <div className="relative aspect-[16/9] overflow-hidden">
+                <div className="relative aspect-[3/2] overflow-hidden">
                   <img
                     src={store.banner_url || store.logo_url || categoryImage(store.category)}
                     alt={store.name}
@@ -437,28 +437,28 @@ function HomePage() {
                     height={512}
                     className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
-                  <span className="absolute left-2 top-2 rounded-full bg-background/90 px-2 py-0.5 text-[11px] font-bold text-foreground shadow-card">
+                  <span className="absolute left-1.5 top-1.5 rounded-full bg-background/90 px-1.5 py-0.5 text-[10px] font-bold text-foreground shadow-card">
                     {store.status === "suspended" ? "Closed" : "Open"}
                   </span>
                 </div>
-                <div className="p-2.5">
+                <div className="p-2">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="line-clamp-1 text-sm font-bold">{store.name}</h3>
-                    <span className="flex shrink-0 items-center gap-1 rounded-lg bg-success/15 px-1.5 py-0.5 text-[11px] font-bold text-success">
-                      <Star className="h-3 w-3 fill-current" />
+                    <h3 className="line-clamp-1 text-xs font-bold">{store.name}</h3>
+                    <span className="flex shrink-0 items-center gap-1 rounded-md bg-success/15 px-1.5 py-0.5 text-[10px] font-bold text-success">
+                      <Star className="h-2.5 w-2.5 fill-current" />
                       {Number(store.rating).toFixed(1)}
                     </span>
                   </div>
-                  <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                  <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
                     {store.description}
                   </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
                     <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
+                      <Clock className="h-2.5 w-2.5" />
                       {store.delivery_minutes} min
                     </span>
                     <span className="flex items-center gap-1">
-                      <Truck className="h-3 w-3" />
+                      <Truck className="h-2.5 w-2.5" />
                       {formatDelivery(store.delivery_fee)}
                     </span>
                     <span className="rounded-md bg-secondary px-1.5 py-0.5 font-medium text-secondary-foreground">
