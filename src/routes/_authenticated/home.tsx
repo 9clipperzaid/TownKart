@@ -107,11 +107,8 @@ function HomePage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
-        .select(
-          "id, store_id, name, description, category, price, discount_price, unit, image_url, is_available, is_popular, popular_sort_order, has_unit_options, unit_options, stores(name)",
-        )
+        .select("*, stores(name)")
         .eq("is_available", true)
-        .order("popular_sort_order", { ascending: true })
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as ProductSearchRow[];
@@ -218,9 +215,16 @@ function HomePage() {
         (p.category ?? "").toLowerCase().includes(query) ||
         (p.stores?.name ?? "").toLowerCase().includes(query)),
   );
+  const popularProducts = products
+    .filter((product) => product.is_popular)
+    .sort(
+      (a, b) =>
+        Number(a.popular_sort_order ?? 100) - Number(b.popular_sort_order ?? 100) ||
+        a.name.localeCompare(b.name),
+    );
   const visibleProducts = query
     ? searchedProducts
-    : products.filter((product) => product.is_popular).slice(0, 12);
+    : (popularProducts.length ? popularProducts : products).slice(0, 12);
   const matchingProductStoreIds = new Set(searchedProducts.map((p) => p.store_id));
 
   const filtered = stores.filter((s) => {
