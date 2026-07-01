@@ -2,9 +2,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Eye, Search, ShieldBan, ShieldCheck } from "lucide-react";
+import { Eye, Search, ShieldBan, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { adminListUsers, adminSetUserBlocked, adminSetUserRole } from "@/lib/admin.functions";
+import {
+  adminDeleteUser,
+  adminListUsers,
+  adminSetUserBlocked,
+  adminSetUserRole,
+} from "@/lib/admin.functions";
 import { formatINR } from "@/lib/format";
 import { userErrorMessage } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -53,6 +58,7 @@ function UsersPage() {
   const list = useServerFn(adminListUsers);
   const setBlocked = useServerFn(adminSetUserBlocked);
   const setRole = useServerFn(adminSetUserRole);
+  const deleteUser = useServerFn(adminDeleteUser);
   const [q, setQ] = useState("");
 
   const { data: users = [], isLoading } = useQuery({
@@ -76,6 +82,16 @@ function UsersPage() {
       qc.invalidateQueries({ queryKey: ["admin-users"] });
     },
     onError: (e: Error) => toast.error(userErrorMessage(e)),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (userId: string) => deleteUser({ data: { userId } }),
+    onSuccess: () => {
+      toast.success("User account deleted");
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "Could not delete user")),
   });
 
   const filtered = users.filter(
@@ -203,7 +219,7 @@ function UsersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-1">
                         <Button asChild size="sm" variant="ghost">
                           <Link to="/admin/users/$userId" params={{ userId: u.id }}>
                             <Eye className="h-3.5 w-3.5" />
@@ -229,6 +245,26 @@ function UsersPage() {
                               <ShieldBan className="h-3.5 w-3.5" /> Block
                             </>
                           )}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          title="Delete user"
+                          disabled={deleteMut.isPending}
+                          onClick={() => {
+                            const identity = u.full_name || u.phone || u.email || "this user";
+                            if (
+                              confirm(
+                                `Permanently delete ${identity}? Their account, orders and saved data will be removed. This cannot be undone.`,
+                              )
+                            ) {
+                              deleteMut.mutate(u.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          <span className="sr-only">Delete user</span>
                         </Button>
                       </div>
                     </td>

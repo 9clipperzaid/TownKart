@@ -968,6 +968,42 @@ export const adminSetUserBlocked = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const adminDeleteUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { userId: string }) => z.object({ userId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const actorRoles = await assertAdmin(context.userId);
+    if (data.userId === context.userId) {
+      throw new Error("You cannot delete your own admin account.");
+    }
+
+    const supabaseAdmin = await getAdmin();
+    const [{ data: targetRoles }, { data: profile }] = await Promise.all([
+      supabaseAdmin.from("user_roles").select("role").eq("user_id", data.userId),
+      supabaseAdmin
+        .from("profiles")
+        .select("full_name, phone, email")
+        .eq("id", data.userId)
+        .maybeSingle(),
+    ]);
+    const targetIsAdmin = (targetRoles ?? []).some((row) =>
+      ["admin", "super_admin"].includes(row.role),
+    );
+    if (targetIsAdmin && !actorRoles.includes("super_admin")) {
+      throw new Error("Only a Super Admin can delete another admin account.");
+    }
+
+    await logAction(context.userId, "delete_user", "user", data.userId, {
+      full_name: profile?.full_name ?? null,
+      phone: profile?.phone ?? null,
+      email: profile?.email ?? null,
+    });
+
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 const ROLE_VALUES = [
   "customer",
   "store_manager",
