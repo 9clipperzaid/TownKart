@@ -1,11 +1,30 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, CheckCircle2, Clock, PackageCheck, Truck, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Clock,
+  PackageCheck,
+  RotateCcw,
+  Truck,
+  XCircle,
+} from "lucide-react";
+import { toast } from "sonner";
 import { getMyOrderDetail } from "@/lib/order.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { userErrorMessage } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/orders/$orderId")({
   beforeLoad: async () => {
@@ -26,9 +45,62 @@ const STEPS = [
 function OrderDetailPage() {
   const { orderId } = Route.useParams();
   const getDetail = useServerFn(getMyOrderDetail);
+  const queryClient = useQueryClient();
+  const [reorderOpen, setReorderOpen] = useState(false);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
   const { data: order, isLoading } = useQuery({
     queryKey: ["order-detail", orderId],
     queryFn: () => getDetail({ data: { orderId } }) as Promise<any>,
+  });
+
+  useEffect(() => {
+    if (!order?.order_items) return;
+    setSelected(
+      Object.fromEntries(
+        order.order_items.map((item: any) => [item.id, Boolean(item.products?.is_available)]),
+      ),
+    );
+  }, [order]);
+
+  const reorderMutation = useMutation({
+    mutationFn: async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Please sign in again.");
+      const chosen = (order.order_items ?? []).filter(
+        (item: any) => selected[item.id] && item.products?.is_available,
+      );
+      for (const item of chosen) {
+        const product = item.products;
+        const selectedUnit = product.unit || "1 unit";
+        const { data: existing } = await supabase
+          .from("cart_items")
+          .select("quantity")
+          .eq("user_id", user.id)
+          .eq("product_id", product.id)
+          .eq("selected_unit", selectedUnit)
+          .maybeSingle();
+        const { error } = await supabase.from("cart_items").upsert(
+          {
+            user_id: user.id,
+            product_id: product.id,
+            selected_unit: selectedUnit,
+            unit_price: Number(product.discount_price ?? product.price),
+            quantity: Number(existing?.quantity ?? 0) + Number(item.quantity),
+          } as never,
+          { onConflict: "user_id,product_id,selected_unit" },
+        );
+        if (error) throw error;
+      }
+      return chosen.length;
+    },
+    onSuccess: (count) => {
+      toast.success(`${count} product${count === 1 ? "" : "s"} added to cart`);
+      setReorderOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["cart-count"] });
+    },
+    onError: (error) => toast.error(userErrorMessage(error, "Could not reorder")),
   });
 
   if (isLoading) {
@@ -65,6 +137,10 @@ function OrderDetailPage() {
           <ArrowLeft className="h-4 w-4" />
           Back
         </Link>
+      </Button>
+      <Button size="sm" onClick={() => setReorderOpen(true)}>
+        <RotateCcw className="h-4 w-4" />
+        Reorder
       </Button>
 
       <section className="rounded-2xl bg-card p-4 shadow-card">
@@ -137,6 +213,53 @@ function OrderDetailPage() {
         <InfoCard title="Payment Method" value={order.payment_method ?? "Cash on delivery"} />
         <InfoCard title="Total Amount" value={formatINR(Number(order.total))} />
       </section>
+
+      <Dialog open={reorderOpen} onOpenChange={setReorderOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Choose products to reorder</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Select the products you want to add to cart.
+          </p>
+          <div className="space-y-2">
+            {order.order_items?.map((item: any) => {
+              const available = Boolean(item.products?.is_available);
+              return (
+                <label
+                  key={item.id}
+                  className={`flex items-center gap-3 rounded-xl border p-3 ${available ? "" : "opacity-55"}`}
+                >
+                  <Checkbox
+                    disabled={!available}
+                    checked={Boolean(selected[item.id])}
+                    onCheckedChange={(checked) =>
+                      setSelected((current) => ({ ...current, [item.id]: checked === true }))
+                    }
+                  />
+                  <span className="flex-1 text-sm font-semibold">
+                    {item.quantity}× {item.name}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {available ? "Available" : "Unavailable"}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReorderOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={reorderMutation.isPending || !Object.values(selected).some(Boolean)}
+              onClick={() => reorderMutation.mutate()}
+            >
+              {reorderMutation.isPending ? "Adding..." : "Add selected to cart"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

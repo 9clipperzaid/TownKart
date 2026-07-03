@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -169,6 +170,7 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
 
   useEffect(() => {
     try {
@@ -180,8 +182,11 @@ function RootComponent() {
           event !== "USER_UPDATED"
         )
           return;
-        router.invalidate();
-        if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+        // Run the refresh in order so a protected redirect never races ahead
+        // of the newly persisted login session.
+        void router.invalidate().then(() => {
+          if (event !== "SIGNED_OUT") void queryClient.invalidateQueries();
+        });
       });
       return () => data.subscription.unsubscribe();
     } catch (error) {
@@ -194,7 +199,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
-      <FloatingContact />
+      {pathname !== "/home" && <FloatingContact />}
       <Toaster position="top-center" richColors />
     </QueryClientProvider>
   );

@@ -17,7 +17,8 @@ import {
   TrendingUp,
   Users,
   Bell,
-  Star,
+  Rows3,
+  Grid2X2,
   ScrollText,
   ClipboardList,
   Settings,
@@ -55,7 +56,8 @@ const NAV = [
   { to: "/admin/categories", label: "Categories", icon: Tags },
   { to: "/admin/stores", label: "Stores", icon: Store },
   { to: "/admin/products", label: "Products", icon: Package },
-  { to: "/admin/popular-products", label: "Popular Products", icon: Star },
+  { to: "/admin/popular-products", label: "Product Sections", icon: Rows3 },
+  { to: "/admin/category-sections", label: "Category Sections", icon: Grid2X2 },
   { to: "/admin/pricing", label: "Pricing", icon: TrendingUp },
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/notifications", label: "Notifications", icon: Bell },
@@ -155,40 +157,36 @@ function AdminShell() {
 
     const channel = supabase
       .channel("admin-new-orders")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "orders" },
-        (payload) => {
-          const order = payload.new as {
-            id?: string;
-            store_name?: string | null;
-            total?: number | string | null;
-          };
-          const total = order.total ? ` - Rs ${Number(order.total).toFixed(0)}` : "";
-          const message = `${order.store_name ?? "TownKart"}${total}`;
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
+        const order = payload.new as {
+          id?: string;
+          store_name?: string | null;
+          total?: number | string | null;
+        };
+        const total = order.total ? ` - Rs ${Number(order.total).toFixed(0)}` : "";
+        const message = `${order.store_name ?? "TownKart"}${total}`;
 
-          startOrderAlertSound();
+        startOrderAlertSound();
 
-          toast.success("New order received", {
-            description: message,
-            duration: Number.POSITIVE_INFINITY,
-            action: order.id
-              ? {
-                  label: "View",
-                  onClick: () => {
-                    stopOrderAlertSound();
-                    navigate({
-                      to: "/admin/orders",
-                      search: { orderId: order.id } as any,
-                    });
-                  },
-                }
-              : undefined,
-          });
+        toast.success("New order received", {
+          description: message,
+          duration: Number.POSITIVE_INFINITY,
+          action: order.id
+            ? {
+                label: "View",
+                onClick: () => {
+                  stopOrderAlertSound();
+                  navigate({
+                    to: "/admin/orders",
+                    search: { orderId: order.id } as any,
+                  });
+                },
+              }
+            : undefined,
+        });
 
-          queryClient.invalidateQueries({ queryKey: ["operational-orders"] });
-        },
-      )
+        queryClient.invalidateQueries({ queryKey: ["operational-orders"] });
+      })
       .subscribe();
 
     return () => {

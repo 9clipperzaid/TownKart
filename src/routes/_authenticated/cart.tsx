@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Plus, Minus, Trash2, ShoppingBag, MapPin, LocateFixed } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { secureCheckout } from "@/lib/order.functions";
+import { reverseGeocodeCoordinates } from "@/lib/maps.functions";
 import { formatINR } from "@/lib/format";
 import { userErrorMessage } from "@/lib/utils";
 import {
@@ -18,6 +19,13 @@ import { CallToOrder } from "@/components/CallToOrder";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/cart")({
   component: CartPage,
@@ -50,10 +58,13 @@ function CartPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const checkoutServer = useServerFn(secureCheckout);
+  const reverseGeocode = useServerFn(reverseGeocodeCoordinates);
   const [address, setAddress] = useState("");
   const [addressLoaded, setAddressLoaded] = useState(false);
   const [deliveryLocation, setDeliveryLocation] = useState<DeliveryLocation | null>(null);
   const [locating, setLocating] = useState(false);
+  const [locationPromptOpen, setLocationPromptOpen] = useState(false);
+  const [locationPromptShown, setLocationPromptShown] = useState(false);
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["cart-detail"],
@@ -111,10 +122,31 @@ function CartPage() {
         .maybeSingle()
         .then(({ data }) => {
           if (data?.address) setAddress(data.address);
+          const savedLocation = getSavedDeliveryLocation();
+          if (savedLocation?.latitude && savedLocation.longitude) {
+            setDeliveryLocation({
+              latitude: savedLocation.latitude,
+              longitude: savedLocation.longitude,
+              accuracy: savedLocation.accuracy ?? null,
+            });
+          }
           setAddressLoaded(true);
         });
     });
   }, [addressLoaded]);
+
+  useEffect(() => {
+    if (
+      !addressLoaded ||
+      isLoading ||
+      items.length === 0 ||
+      deliveryLocation ||
+      locationPromptShown
+    )
+      return;
+    setLocationPromptShown(true);
+    setLocationPromptOpen(true);
+  }, [addressLoaded, deliveryLocation, isLoading, items.length, locationPromptShown]);
 
   const setQty = useMutation({
     mutationFn: async ({ id, quantity }: { id: string; quantity: number }) => {
@@ -159,15 +191,40 @@ function CartPage() {
 
       setLocating(true);
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           const nextLocation = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
             accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
           };
           setDeliveryLocation(nextLocation);
+          let readableAddress = address.trim();
+          try {
+            const result = await reverseGeocode({
+              data: {
+                latitude: nextLocation.latitude,
+                longitude: nextLocation.longitude,
+              },
+            });
+            readableAddress = result.formatted;
+            setAddress(readableAddress);
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+            const user = session?.user;
+            if (user) {
+              await supabase
+                .from("profiles")
+                .update({ address: readableAddress })
+                .eq("id", user.id);
+              queryClient.invalidateQueries({ queryKey: ["my-address"] });
+              queryClient.invalidateQueries({ queryKey: ["profile"] });
+            }
+          } catch (error) {
+            console.error("[Location] Reverse geocoding failed", error);
+          }
           saveDeliveryLocation({
-            address: address.trim() || "Current location",
+            address: readableAddress || "Current location",
             latitude: nextLocation.latitude,
             longitude: nextLocation.longitude,
             accuracy: nextLocation.accuracy,
@@ -176,14 +233,16 @@ function CartPage() {
           toast.success("Delivery location added");
           resolve(nextLocation);
         },
-        () => {
+        (error) => {
           setLocating(false);
           toast.error(
-            "Could not get your location. You can still place the order with your address.",
+            error.code === error.PERMISSION_DENIED
+              ? "Location permission is blocked. Please allow location access in your browser settings and try again."
+              : "Could not detect your location. Turn on GPS and try again, or enter your address manually.",
           );
           resolve(null);
         },
-        { enableHighAccuracy: false, maximumAge: 60_000, timeout: 15_000 },
+        { enableHighAccuracy: true, maximumAge: 300_000, timeout: 25_000 },
       );
     });
 
@@ -332,6 +391,37 @@ function CartPage() {
         {checkout.isPending ? "Placing order..." : `Place order - ${formatINR(total)}`}
       </Button>
       <CallToOrder variant="secondary" className="mt-3 h-11 w-full" />
+
+      <Dialog open={locationPromptOpen} onOpenChange={setLocationPromptOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <LocateFixed className="h-5 w-5 text-primary" />
+              Allow delivery location
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm leading-6 text-muted-foreground">
+            TownKart needs your location to save the correct delivery address and help the store
+            find you easily. Your coordinates will be converted into a readable address.
+          </p>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setLocationPromptOpen(false)}>
+              Not now
+            </Button>
+            <Button
+              type="button"
+              disabled={locating}
+              onClick={() => {
+                setLocationPromptOpen(false);
+                void fetchDeliveryLocation();
+              }}
+            >
+              <LocateFixed className="h-4 w-4" />
+              {locating ? "Detecting..." : "Allow location"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

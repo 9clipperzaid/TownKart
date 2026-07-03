@@ -17,7 +17,7 @@ import { z } from "zod";
 
 const loginSearchSchema = z.object({
   redirectTo: z.string().optional(),
-  error: z.enum(["phone_in_use"]).optional(),
+  error: z.enum(["phone_in_use", "phone_mismatch", "account_check_failed"]).optional(),
 });
 
 function safeRedirect(value: string | undefined) {
@@ -28,8 +28,8 @@ export const Route = createFileRoute("/auth/login")({
   ssr: false,
   validateSearch: (search) => loginSearchSchema.parse(search),
   beforeLoad: async ({ search }) => {
-    const { data } = await supabase.auth.getUser();
-    if (data.user) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user) {
       throw redirect({ to: safeRedirect(search.redirectTo) });
     }
   },
@@ -73,6 +73,10 @@ function LoginPage() {
   useEffect(() => {
     if (error === "phone_in_use") {
       toast.error("This phone number is already linked to another account.");
+    } else if (error === "phone_mismatch") {
+      toast.error("This Google account is already linked to a different phone number.");
+    } else if (error === "account_check_failed") {
+      toast.error("We could not verify your account. Please try signing in again.");
     }
   }, [error]);
 

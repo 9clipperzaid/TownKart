@@ -218,7 +218,9 @@ export const listOperationalOrders = createServerFn({ method: "GET" })
 
     let query = supabaseAdmin
       .from("orders")
-      .select("*, order_items(name, quantity, unit_price)")
+      .select(
+        "*, order_items(id, product_id, name, quantity, unit_price, products(id, name, unit, price, discount_price, is_available, store_id))",
+      )
       .order("created_at", { ascending: false })
       .limit(100);
 
@@ -249,7 +251,7 @@ export const getMyOrderDetail = createServerFn({ method: "GET" })
     const supabaseAdmin = await getAdmin();
     const { data: order, error } = await supabaseAdmin
       .from("orders")
-      .select("*, order_items(name, quantity, unit_price)")
+      .select("*, order_items(product_id, name, quantity, unit_price)")
       .eq("id", data.orderId)
       .eq("customer_id", context.userId)
       .maybeSingle();
@@ -284,7 +286,9 @@ export const cancelMyOrder = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!order) throw new Error("Order not found.");
     if (!CUSTOMER_CANCELLABLE_STATUSES.includes(order.status as any)) {
-      throw new Error("This order can no longer be cancelled from the app. Please contact support.");
+      throw new Error(
+        "This order can no longer be cancelled from the app. Please contact support.",
+      );
     }
 
     const { error: updateError } = await supabaseAdmin
@@ -313,7 +317,9 @@ export const cancelMyOrder = createServerFn({ method: "POST" })
       if (!product) continue;
       await supabaseAdmin
         .from("products")
-        .update({ stock_quantity: Number(product.stock_quantity ?? 0) + Number(item.quantity ?? 0) })
+        .update({
+          stock_quantity: Number(product.stock_quantity ?? 0) + Number(item.quantity ?? 0),
+        })
         .eq("id", item.product_id);
     }
 

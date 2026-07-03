@@ -1,38 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Star, Clock, Search, Truck, Plus, Minus } from "lucide-react";
+import { ArrowRight, Search, Plus, Minus, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { categoryImage, categoryLabel } from "@/lib/categories";
 import { formatINR } from "@/lib/format";
 import { getLocalCart, getUnitOptions, updateLocalCartItem } from "@/lib/local-cart";
 import { cn, userErrorMessage } from "@/lib/utils";
 import { CallToOrder } from "@/components/CallToOrder";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { getHomeBanners } from "@/lib/admin.functions";
+import { getCategorySections, getHomeBanners } from "@/lib/admin.functions";
 import townKartHeroWatermark from "@/assets/townkart-hero-watermark.png";
 
 export const Route = createFileRoute("/_authenticated/home")({
   component: HomePage,
 });
-
-type Store = {
-  id: string;
-  name: string;
-  description: string | null;
-  category: string;
-  rating: number;
-  delivery_minutes: number;
-  min_order: number;
-  delivery_available?: boolean;
-  delivery_fee?: number;
-  banner_url?: string | null;
-  logo_url?: string | null;
-  status?: string;
-};
 
 type ProductSearchRow = {
   id: string;
@@ -52,10 +36,32 @@ type ProductSearchRow = {
   stores: { name: string } | null;
 };
 
+type ProductSection = {
+  id: string;
+  title: string;
+  display_order: number;
+  layout_mode: "horizontal" | "grid_1x4" | "grid_2x4";
+  product_section_items: {
+    id: string;
+    display_order: number;
+    products: ProductSearchRow | null;
+  }[];
+};
+
 type Category = {
+  id: string;
   key: string;
   label: string;
   emoji: string | null;
+  image_url: string | null;
+};
+
+type CategorySection = {
+  id: string;
+  title: string;
+  display_order: number;
+  rows: 1 | 2;
+  category_section_items: { category_id: string; display_order: number }[];
 };
 
 type HomeBanner = {
@@ -70,22 +76,44 @@ type HomeBanner = {
 function HomePage() {
   const queryClient = useQueryClient();
   const loadHomeBanners = useServerFn(getHomeBanners);
+  const loadCategorySections = useServerFn(getCategorySections);
   const [active, setActive] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [bannerIndex, setBannerIndex] = useState(0);
   const [detailProduct, setDetailProduct] = useState<ProductSearchRow | null>(null);
   const [selectedUnits, setSelectedUnits] = useState<Record<string, string>>({});
+  const bannerPointerRef = useRef<{ id: number; x: number; y: number } | null>(null);
+  const bannerDraggedRef = useRef(false);
 
-  const { data: stores = [], isLoading } = useQuery({
-    queryKey: ["stores"],
+  const { data: productSections = [], isLoading } = useQuery({
+    queryKey: ["home-product-sections"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("stores")
-        .select("*")
+      const db = supabase as any;
+      const { data, error } = await db
+        .from("product_sections")
+        .select(
+          "id, title, display_order, layout_mode, product_section_items(id, display_order, products(*, stores(name)))",
+        )
         .eq("is_active", true)
-        .order("rating", { ascending: false });
+        .order("display_order", { ascending: true })
+        .order("display_order", { referencedTable: "product_section_items", ascending: true });
+      if (error?.code === "42703") {
+        const legacy = await db
+          .from("product_sections")
+          .select(
+            "id, title, display_order, product_section_items(id, display_order, products(*, stores(name)))",
+          )
+          .eq("is_active", true)
+          .order("display_order", { ascending: true })
+          .order("display_order", { referencedTable: "product_section_items", ascending: true });
+        if (legacy.error) throw legacy.error;
+        return (legacy.data ?? []).map((section: Omit<ProductSection, "layout_mode">) => ({
+          ...section,
+          layout_mode: "horizontal" as const,
+        }));
+      }
       if (error) throw error;
-      return data as Store[];
+      return data as ProductSection[];
     },
   });
 
@@ -94,24 +122,11 @@ function HomePage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("categories")
-        .select("key, label, emoji")
+        .select("id, key, label, emoji, image_url")
         .eq("is_enabled", true)
         .order("sort_order", { ascending: true });
       if (error) throw error;
       return data as Category[];
-    },
-  });
-
-  const { data: products = [] } = useQuery({
-    queryKey: ["product-search"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*, stores(name)")
-        .eq("is_available", true)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as ProductSearchRow[];
     },
   });
 
@@ -142,6 +157,11 @@ function HomePage() {
     queryFn: () => loadHomeBanners(),
   });
 
+  const { data: categorySections = [] } = useQuery({
+    queryKey: ["home-category-sections"],
+    queryFn: () => loadCategorySections() as Promise<CategorySection[]>,
+  });
+
   const heroBanners = useMemo<HomeBanner[]>(
     () =>
       adminBanners
@@ -150,18 +170,23 @@ function HomePage() {
     [adminBanners],
   );
 
-  // Live updates: when an admin changes stores/products/categories, refresh.
+  // Live updates: reflect admin section and product changes without a refresh.
   useEffect(() => {
     const channel = supabase
       .channel("marketplace-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "stores" }, () =>
-        queryClient.invalidateQueries({ queryKey: ["stores"] }),
-      )
       .on("postgres_changes", { event: "*", schema: "public", table: "categories" }, () =>
         queryClient.invalidateQueries({ queryKey: ["categories"] }),
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () =>
-        queryClient.invalidateQueries({ queryKey: ["product-search"] }),
+        queryClient.invalidateQueries({ queryKey: ["home-product-sections"] }),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "product_sections" }, () =>
+        queryClient.invalidateQueries({ queryKey: ["home-product-sections"] }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "product_section_items" },
+        () => queryClient.invalidateQueries({ queryKey: ["home-product-sections"] }),
       )
       .subscribe();
     return () => {
@@ -207,36 +232,23 @@ function HomePage() {
   }, [heroBanners.length]);
 
   const query = q.trim().toLowerCase();
-  const searchedProducts = products.filter(
-    (p) =>
-      query &&
-      (p.name.toLowerCase().includes(query) ||
-        (p.description ?? "").toLowerCase().includes(query) ||
-        (p.category ?? "").toLowerCase().includes(query) ||
-        (p.stores?.name ?? "").toLowerCase().includes(query)),
-  );
-  const popularProducts = products
-    .filter((product) => product.is_popular)
-    .sort(
-      (a, b) =>
-        Number(a.popular_sort_order ?? 100) - Number(b.popular_sort_order ?? 100) ||
-        a.name.localeCompare(b.name),
-    );
-  const visibleProducts = query
-    ? searchedProducts
-    : (popularProducts.length ? popularProducts : products).slice(0, 12);
-  const matchingProductStoreIds = new Set(searchedProducts.map((p) => p.store_id));
-
-  const filtered = stores.filter((s) => {
-    const matchesCat = !active || s.category === active;
-    const matchesQ =
-      !query ||
-      s.name.toLowerCase().includes(query) ||
-      s.category.toLowerCase().includes(query) ||
-      (s.description ?? "").toLowerCase().includes(query) ||
-      matchingProductStoreIds.has(s.id);
-    return matchesCat && matchesQ;
-  });
+  const cartTotal = Object.values(cart).reduce((total, quantity) => total + quantity, 0);
+  const visibleSections = productSections
+    .map((section) => ({
+      ...section,
+      products: section.product_section_items
+        .map((item) => item.products)
+        .filter((product): product is ProductSearchRow => Boolean(product?.is_available))
+        .filter((product) => !active || product.category === active)
+        .filter(
+          (product) =>
+            !query ||
+            product.name.toLowerCase().includes(query) ||
+            (product.description ?? "").toLowerCase().includes(query) ||
+            (product.stores?.name ?? "").toLowerCase().includes(query),
+        ),
+    }))
+    .filter((section) => section.products.length > 0 || (!query && !active));
 
   const setQty = useMutation({
     mutationFn: async ({
@@ -296,10 +308,56 @@ function HomePage() {
     onError: (e) => toast.error(userErrorMessage(e, "Could not update cart")),
   });
 
+  const addProductToCart = (product: ProductSearchRow) => {
+    const option = getUnitOptions(product)[0];
+    const selectedUnit = option?.label ?? product.unit;
+    const unitPrice = Number(option?.unitPrice ?? product.price);
+    const quantity = cart[`${product.id}::${selectedUnit}`] ?? 0;
+    setQty.mutate({ product, selectedUnit, unitPrice, quantity: quantity + 1 });
+  };
+
+  const moveBanner = (direction: 1 | -1) => {
+    if (heroBanners.length < 2) return;
+    setBannerIndex((current) => (current + direction + heroBanners.length) % heroBanners.length);
+  };
+
   return (
-    <div>
+    <div className="flex flex-col">
       <section className="px-4 pt-4">
-        <div className="relative overflow-hidden rounded-2xl bg-brand-gradient text-primary-foreground shadow-card">
+        <div
+          className="relative cursor-grab touch-pan-y select-none overflow-hidden rounded-2xl bg-brand-gradient text-primary-foreground shadow-card active:cursor-grabbing"
+          onPointerDown={(event) => {
+            bannerPointerRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
+            bannerDraggedRef.current = false;
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            const start = bannerPointerRef.current;
+            if (!start || start.id !== event.pointerId) return;
+            if (Math.abs(event.clientX - start.x) > 10) bannerDraggedRef.current = true;
+          }}
+          onPointerUp={(event) => {
+            const start = bannerPointerRef.current;
+            bannerPointerRef.current = null;
+            if (!start || start.id !== event.pointerId) return;
+            const deltaX = event.clientX - start.x;
+            const deltaY = event.clientY - start.y;
+            if (Math.abs(deltaX) >= 45 && Math.abs(deltaX) > Math.abs(deltaY)) {
+              moveBanner(deltaX < 0 ? 1 : -1);
+            }
+          }}
+          onPointerCancel={() => {
+            bannerPointerRef.current = null;
+            bannerDraggedRef.current = false;
+          }}
+          onClickCapture={(event) => {
+            if (bannerDraggedRef.current) {
+              event.preventDefault();
+              event.stopPropagation();
+              bannerDraggedRef.current = false;
+            }
+          }}
+        >
           <div className="relative min-h-[260px] p-5">
             {heroBanners.map((banner, index) => (
               <div
@@ -382,7 +440,7 @@ function HomePage() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search TownKart stores & products"
+            placeholder="Search products and stores"
             className="h-12 w-full rounded-2xl border border-border bg-card pl-10 pr-4 text-sm shadow-card outline-none ring-primary/30 focus:ring-2"
           />
         </div>
@@ -403,121 +461,170 @@ function HomePage() {
         </div>
       </section>
 
-      <section className="px-4 pb-4 pt-6">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold">
-            {query ? "Matching stores" : active ? categoryLabel(active) : "Popular stores"}
-          </h2>
-          <span className="text-xs font-semibold text-primary">{filtered.length} available</span>
-        </div>
-
-        {isLoading ? (
-          <div className="space-y-3">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-28 animate-pulse rounded-2xl bg-muted" />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">No stores found.</p>
-        ) : (
-          <div className="grid gap-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
-            {filtered.map((store) => (
-              <Link
-                key={store.id}
-                to="/store/$storeId"
-                params={{ storeId: store.id }}
-                className="group overflow-hidden rounded-lg bg-card shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-pop active:scale-[0.99]"
-              >
-                <div className="relative aspect-[3/2] overflow-hidden">
-                  <img
-                    src={store.banner_url || store.logo_url || categoryImage(store.category)}
-                    alt={store.name}
-                    loading="lazy"
-                    width={768}
-                    height={512}
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-                  <span className="absolute left-1.5 top-1.5 rounded-full bg-background/90 px-1.5 py-0.5 text-[10px] font-bold text-foreground shadow-card">
-                    {store.status === "suspended" ? "Closed" : "Open"}
-                  </span>
-                </div>
-                <div className="p-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="line-clamp-1 text-xs font-bold">{store.name}</h3>
-                    <span className="flex shrink-0 items-center gap-1 rounded-md bg-success/15 px-1.5 py-0.5 text-[10px] font-bold text-success">
-                      <Star className="h-2.5 w-2.5 fill-current" />
-                      {Number(store.rating).toFixed(1)}
-                    </span>
+      {categorySections.map((section) => {
+        const tiles = [...section.category_section_items]
+          .sort((a, b) => a.display_order - b.display_order)
+          .map((item) => categories.find((category) => category.id === item.category_id))
+          .filter((category): category is Category => Boolean(category))
+          .slice(0, section.rows * 4);
+        if (!tiles.length) return null;
+        return (
+          <section key={section.id} className="order-2 px-4 pb-4 pt-6">
+            <h2 className="mb-3 text-lg font-bold">{section.title}</h2>
+            <div className="grid grid-cols-4 gap-x-2.5 gap-y-5">
+              {tiles.map((category) => (
+                <Link
+                  key={category.id}
+                  to="/category/$categoryKey"
+                  params={{ categoryKey: category.key }}
+                  className="min-w-0 text-center"
+                >
+                  <div className="aspect-square overflow-hidden rounded-2xl bg-secondary/70">
+                    {category.image_url ? (
+                      <img
+                        src={category.image_url}
+                        alt={category.label}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-3xl sm:text-5xl">
+                        {category.emoji ?? "◻"}
+                      </div>
+                    )}
                   </div>
-                  <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
-                    {store.description}
+                  <p className="mt-2 line-clamp-2 text-xs font-bold leading-tight sm:text-sm">
+                    {category.label}
                   </p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-2.5 w-2.5" />
-                      {store.delivery_minutes} min
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Truck className="h-2.5 w-2.5" />
-                      {formatDelivery(store.delivery_fee)}
-                    </span>
-                    <span className="rounded-md bg-secondary px-1.5 py-0.5 font-medium text-secondary-foreground">
-                      {categoryLabel(store.category)}
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
+                </Link>
+              ))}
+            </div>
+          </section>
+        );
+      })}
 
-      <section className="px-4 pb-4 pt-3">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold">{query ? "Matching products" : "Popular products"}</h2>
-          <span className="text-xs font-semibold text-primary">{visibleProducts.length} items</span>
-        </div>
-        {visibleProducts.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            {query ? "No matching products found." : "No popular products selected yet."}
-          </p>
-        ) : (
-          <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
-            {visibleProducts.map((product) => (
-              <button
-                key={product.id}
-                type="button"
-                onClick={() => setDetailProduct(product)}
-                className="rounded-xl border border-border/70 bg-card p-2 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-pop"
+      {isLoading ? (
+        <div className="mx-4 mt-6 h-56 animate-pulse rounded-2xl bg-muted" />
+      ) : visibleSections.length === 0 ? (
+        <p className="mx-4 my-8 rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+          No matching products found.
+        </p>
+      ) : (
+        visibleSections.map((section) => (
+          <section key={section.id} className="order-1 px-4 pb-4 pt-6">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-bold">{section.title}</h2>
+              <Link
+                to="/product-sections/$sectionId"
+                params={{ sectionId: section.id }}
+                className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
               >
-                {product.image_url ? (
-                  <img
-                    src={product.image_url}
-                    alt={product.name}
-                    className="aspect-square w-full rounded-lg object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-secondary text-xl font-extrabold text-primary">
-                    {categories.find((category) => category.key === product.category)?.emoji ??
-                      "TK"}
-                  </div>
+                View all products
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            {section.products.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                No products assigned to this section yet.
+              </p>
+            ) : (
+              <div
+                className={cn(
+                  "gap-2.5 pb-3",
+                  section.layout_mode === "grid_1x4" || section.layout_mode === "grid_2x4"
+                    ? "grid grid-cols-4 overflow-visible"
+                    : "flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scroll-behavior:smooth] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
                 )}
-                <p className="mt-1.5 text-[10px] font-medium text-muted-foreground">
-                  {product.unit}
-                </p>
-                <h3 className="line-clamp-2 min-h-8 text-xs font-semibold leading-tight">
-                  {product.name}
-                </h3>
-                <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">
-                  {product.stores?.name ?? "TownKart store"}
-                </p>
-                <p className="mt-0.5 text-xs font-extrabold">{formatINR(Number(product.price))}</p>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
+              >
+                {section.products
+                  .slice(
+                    0,
+                    section.layout_mode === "grid_1x4"
+                      ? 4
+                      : section.layout_mode === "grid_2x4"
+                        ? 8
+                        : undefined,
+                  )
+                  .map((product) => (
+                    <div
+                      key={product.id}
+                      onClick={() => setDetailProduct(product)}
+                      className={cn(
+                        "min-w-0 rounded-xl border border-border/70 bg-card p-1.5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-pop sm:p-2",
+                        section.layout_mode === "horizontal" && "w-36 shrink-0 snap-start sm:w-40",
+                      )}
+                    >
+                      {product.image_url ? (
+                        <img
+                          src={product.image_url}
+                          alt={product.name}
+                          className="aspect-square w-full rounded-lg object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-secondary text-xl font-extrabold text-primary">
+                          {categories.find((category) => category.key === product.category)
+                            ?.emoji ?? "TK"}
+                        </div>
+                      )}
+                      <p className="mt-1.5 text-[10px] font-medium text-muted-foreground">
+                        {product.unit}
+                      </p>
+                      <h3 className="line-clamp-2 min-h-8 text-xs font-semibold leading-tight">
+                        {product.name}
+                      </h3>
+                      <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">
+                        {product.stores?.name ?? "TownKart store"}
+                      </p>
+                      <div className="mt-1 flex items-center justify-between gap-1">
+                        <p className="text-xs font-extrabold">{formatINR(Number(product.price))}</p>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            addProductToCart(product);
+                          }}
+                          className="rounded-md border border-primary px-2 py-1 text-[10px] font-extrabold text-primary hover:bg-primary hover:text-primary-foreground"
+                        >
+                          {(cart[
+                            `${product.id}::${getUnitOptions(product)[0]?.label ?? product.unit}`
+                          ] ?? 0) > 0
+                            ? `Add +`
+                            : "Add"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                {section.layout_mode === "horizontal" && (
+                  <Link
+                    to="/product-sections/$sectionId"
+                    params={{ sectionId: section.id }}
+                    className="flex min-h-56 w-36 shrink-0 snap-start flex-col items-center justify-center gap-3 rounded-xl border border-primary/25 bg-primary/5 p-4 text-center text-primary shadow-card transition hover:-translate-y-0.5 hover:bg-primary/10 hover:shadow-pop sm:w-40"
+                  >
+                    <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      <ArrowRight className="h-5 w-5" />
+                    </span>
+                    <span className="text-sm font-bold">View all products</span>
+                  </Link>
+                )}
+              </div>
+            )}
+          </section>
+        ))
+      )}
+
+      {cartTotal > 0 && (
+        <div className="fixed inset-x-0 bottom-20 z-30 mx-auto max-w-md px-4 lg:bottom-6 lg:max-w-md">
+          <Button asChild size="lg" className="h-13 w-full justify-between text-base shadow-pop">
+            <Link to="/cart">
+              <span className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5" />
+                {cartTotal} item{cartTotal === 1 ? "" : "s"} in cart
+              </span>
+              <span>View cart →</span>
+            </Link>
+          </Button>
+        </div>
+      )}
 
       <Dialog open={!!detailProduct} onOpenChange={(open) => !open && setDetailProduct(null)}>
         <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
@@ -651,11 +758,6 @@ function HomePage() {
       </Dialog>
     </div>
   );
-}
-
-function formatDelivery(value?: number) {
-  if (!value) return "Free";
-  return `Rs ${value}`;
 }
 
 function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {

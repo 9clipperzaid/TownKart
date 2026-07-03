@@ -24,7 +24,9 @@ import { Route as AuthenticatedCartRouteImport } from './routes/_authenticated/c
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
 import { Route as AuthenticatedStoreStoreIdRouteImport } from './routes/_authenticated/store.$storeId'
+import { Route as AuthenticatedProductSectionsSectionIdRouteImport } from './routes/_authenticated/product-sections.$sectionId'
 import { Route as AuthenticatedOrdersOrderIdRouteImport } from './routes/_authenticated/orders.$orderId'
+import { Route as AuthenticatedCategoryCategoryKeyRouteImport } from './routes/_authenticated/category.$categoryKey'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin/users'
 import { Route as AuthenticatedAdminStoresRouteImport } from './routes/_authenticated/admin/stores'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin/settings'
@@ -33,6 +35,7 @@ import { Route as AuthenticatedAdminPricingRouteImport } from './routes/_authent
 import { Route as AuthenticatedAdminPopularProductsRouteImport } from './routes/_authenticated/admin/popular-products'
 import { Route as AuthenticatedAdminOrdersRouteImport } from './routes/_authenticated/admin/orders'
 import { Route as AuthenticatedAdminNotificationsRouteImport } from './routes/_authenticated/admin/notifications'
+import { Route as AuthenticatedAdminCategorySectionsRouteImport } from './routes/_authenticated/admin/category-sections'
 import { Route as AuthenticatedAdminCategoriesRouteImport } from './routes/_authenticated/admin/categories'
 import { Route as AuthenticatedAdminCallOrdersRouteImport } from './routes/_authenticated/admin/call-orders'
 import { Route as AuthenticatedAdminAuditRouteImport } from './routes/_authenticated/admin/audit'
@@ -113,11 +116,23 @@ const AuthenticatedStoreStoreIdRoute =
     path: '/store/$storeId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedProductSectionsSectionIdRoute =
+  AuthenticatedProductSectionsSectionIdRouteImport.update({
+    id: '/product-sections/$sectionId',
+    path: '/product-sections/$sectionId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedOrdersOrderIdRoute =
   AuthenticatedOrdersOrderIdRouteImport.update({
     id: '/$orderId',
     path: '/$orderId',
     getParentRoute: () => AuthenticatedOrdersRoute,
+  } as any)
+const AuthenticatedCategoryCategoryKeyRoute =
+  AuthenticatedCategoryCategoryKeyRouteImport.update({
+    id: '/category/$categoryKey',
+    path: '/category/$categoryKey',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedAdminUsersRoute = AuthenticatedAdminUsersRouteImport.update({
   id: '/users',
@@ -166,6 +181,12 @@ const AuthenticatedAdminNotificationsRoute =
     path: '/notifications',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminCategorySectionsRoute =
+  AuthenticatedAdminCategorySectionsRouteImport.update({
+    id: '/category-sections',
+    path: '/category-sections',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminCategoriesRoute =
   AuthenticatedAdminCategoriesRouteImport.update({
     id: '/categories',
@@ -206,6 +227,7 @@ export interface FileRoutesByFullPath {
   '/admin/audit': typeof AuthenticatedAdminAuditRoute
   '/admin/call-orders': typeof AuthenticatedAdminCallOrdersRoute
   '/admin/categories': typeof AuthenticatedAdminCategoriesRoute
+  '/admin/category-sections': typeof AuthenticatedAdminCategorySectionsRoute
   '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
   '/admin/orders': typeof AuthenticatedAdminOrdersRoute
   '/admin/popular-products': typeof AuthenticatedAdminPopularProductsRoute
@@ -214,7 +236,9 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/stores': typeof AuthenticatedAdminStoresRoute
   '/admin/users': typeof AuthenticatedAdminUsersRouteWithChildren
+  '/category/$categoryKey': typeof AuthenticatedCategoryCategoryKeyRoute
   '/orders/$orderId': typeof AuthenticatedOrdersOrderIdRoute
+  '/product-sections/$sectionId': typeof AuthenticatedProductSectionsSectionIdRoute
   '/store/$storeId': typeof AuthenticatedStoreStoreIdRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/admin/users/$userId': typeof AuthenticatedAdminUsersUserIdRoute
@@ -234,6 +258,7 @@ export interface FileRoutesByTo {
   '/admin/audit': typeof AuthenticatedAdminAuditRoute
   '/admin/call-orders': typeof AuthenticatedAdminCallOrdersRoute
   '/admin/categories': typeof AuthenticatedAdminCategoriesRoute
+  '/admin/category-sections': typeof AuthenticatedAdminCategorySectionsRoute
   '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
   '/admin/orders': typeof AuthenticatedAdminOrdersRoute
   '/admin/popular-products': typeof AuthenticatedAdminPopularProductsRoute
@@ -242,7 +267,9 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/stores': typeof AuthenticatedAdminStoresRoute
   '/admin/users': typeof AuthenticatedAdminUsersRouteWithChildren
+  '/category/$categoryKey': typeof AuthenticatedCategoryCategoryKeyRoute
   '/orders/$orderId': typeof AuthenticatedOrdersOrderIdRoute
+  '/product-sections/$sectionId': typeof AuthenticatedProductSectionsSectionIdRoute
   '/store/$storeId': typeof AuthenticatedStoreStoreIdRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/admin/users/$userId': typeof AuthenticatedAdminUsersUserIdRoute
@@ -265,6 +292,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/audit': typeof AuthenticatedAdminAuditRoute
   '/_authenticated/admin/call-orders': typeof AuthenticatedAdminCallOrdersRoute
   '/_authenticated/admin/categories': typeof AuthenticatedAdminCategoriesRoute
+  '/_authenticated/admin/category-sections': typeof AuthenticatedAdminCategorySectionsRoute
   '/_authenticated/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
   '/_authenticated/admin/orders': typeof AuthenticatedAdminOrdersRoute
   '/_authenticated/admin/popular-products': typeof AuthenticatedAdminPopularProductsRoute
@@ -273,7 +301,9 @@ export interface FileRoutesById {
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/stores': typeof AuthenticatedAdminStoresRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRouteWithChildren
+  '/_authenticated/category/$categoryKey': typeof AuthenticatedCategoryCategoryKeyRoute
   '/_authenticated/orders/$orderId': typeof AuthenticatedOrdersOrderIdRoute
+  '/_authenticated/product-sections/$sectionId': typeof AuthenticatedProductSectionsSectionIdRoute
   '/_authenticated/store/$storeId': typeof AuthenticatedStoreStoreIdRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/admin/users/$userId': typeof AuthenticatedAdminUsersUserIdRoute
@@ -296,6 +326,7 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/call-orders'
     | '/admin/categories'
+    | '/admin/category-sections'
     | '/admin/notifications'
     | '/admin/orders'
     | '/admin/popular-products'
@@ -304,7 +335,9 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/stores'
     | '/admin/users'
+    | '/category/$categoryKey'
     | '/orders/$orderId'
+    | '/product-sections/$sectionId'
     | '/store/$storeId'
     | '/admin/'
     | '/admin/users/$userId'
@@ -324,6 +357,7 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/call-orders'
     | '/admin/categories'
+    | '/admin/category-sections'
     | '/admin/notifications'
     | '/admin/orders'
     | '/admin/popular-products'
@@ -332,7 +366,9 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/stores'
     | '/admin/users'
+    | '/category/$categoryKey'
     | '/orders/$orderId'
+    | '/product-sections/$sectionId'
     | '/store/$storeId'
     | '/admin'
     | '/admin/users/$userId'
@@ -354,6 +390,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/audit'
     | '/_authenticated/admin/call-orders'
     | '/_authenticated/admin/categories'
+    | '/_authenticated/admin/category-sections'
     | '/_authenticated/admin/notifications'
     | '/_authenticated/admin/orders'
     | '/_authenticated/admin/popular-products'
@@ -362,7 +399,9 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/stores'
     | '/_authenticated/admin/users'
+    | '/_authenticated/category/$categoryKey'
     | '/_authenticated/orders/$orderId'
+    | '/_authenticated/product-sections/$sectionId'
     | '/_authenticated/store/$storeId'
     | '/_authenticated/admin/'
     | '/_authenticated/admin/users/$userId'
@@ -483,12 +522,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedStoreStoreIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/product-sections/$sectionId': {
+      id: '/_authenticated/product-sections/$sectionId'
+      path: '/product-sections/$sectionId'
+      fullPath: '/product-sections/$sectionId'
+      preLoaderRoute: typeof AuthenticatedProductSectionsSectionIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/orders/$orderId': {
       id: '/_authenticated/orders/$orderId'
       path: '/$orderId'
       fullPath: '/orders/$orderId'
       preLoaderRoute: typeof AuthenticatedOrdersOrderIdRouteImport
       parentRoute: typeof AuthenticatedOrdersRoute
+    }
+    '/_authenticated/category/$categoryKey': {
+      id: '/_authenticated/category/$categoryKey'
+      path: '/category/$categoryKey'
+      fullPath: '/category/$categoryKey'
+      preLoaderRoute: typeof AuthenticatedCategoryCategoryKeyRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/admin/users': {
       id: '/_authenticated/admin/users'
@@ -546,6 +599,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminNotificationsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/category-sections': {
+      id: '/_authenticated/admin/category-sections'
+      path: '/category-sections'
+      fullPath: '/admin/category-sections'
+      preLoaderRoute: typeof AuthenticatedAdminCategorySectionsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/categories': {
       id: '/_authenticated/admin/categories'
       path: '/categories'
@@ -595,6 +655,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAuditRoute: typeof AuthenticatedAdminAuditRoute
   AuthenticatedAdminCallOrdersRoute: typeof AuthenticatedAdminCallOrdersRoute
   AuthenticatedAdminCategoriesRoute: typeof AuthenticatedAdminCategoriesRoute
+  AuthenticatedAdminCategorySectionsRoute: typeof AuthenticatedAdminCategorySectionsRoute
   AuthenticatedAdminNotificationsRoute: typeof AuthenticatedAdminNotificationsRoute
   AuthenticatedAdminOrdersRoute: typeof AuthenticatedAdminOrdersRoute
   AuthenticatedAdminPopularProductsRoute: typeof AuthenticatedAdminPopularProductsRoute
@@ -611,6 +672,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminAuditRoute: AuthenticatedAdminAuditRoute,
     AuthenticatedAdminCallOrdersRoute: AuthenticatedAdminCallOrdersRoute,
     AuthenticatedAdminCategoriesRoute: AuthenticatedAdminCategoriesRoute,
+    AuthenticatedAdminCategorySectionsRoute:
+      AuthenticatedAdminCategorySectionsRoute,
     AuthenticatedAdminNotificationsRoute: AuthenticatedAdminNotificationsRoute,
     AuthenticatedAdminOrdersRoute: AuthenticatedAdminOrdersRoute,
     AuthenticatedAdminPopularProductsRoute:
@@ -648,6 +711,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedOrdersRoute: typeof AuthenticatedOrdersRouteWithChildren
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedVendorRoute: typeof AuthenticatedVendorRoute
+  AuthenticatedCategoryCategoryKeyRoute: typeof AuthenticatedCategoryCategoryKeyRoute
+  AuthenticatedProductSectionsSectionIdRoute: typeof AuthenticatedProductSectionsSectionIdRoute
   AuthenticatedStoreStoreIdRoute: typeof AuthenticatedStoreStoreIdRoute
 }
 
@@ -660,6 +725,9 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedOrdersRoute: AuthenticatedOrdersRouteWithChildren,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedVendorRoute: AuthenticatedVendorRoute,
+  AuthenticatedCategoryCategoryKeyRoute: AuthenticatedCategoryCategoryKeyRoute,
+  AuthenticatedProductSectionsSectionIdRoute:
+    AuthenticatedProductSectionsSectionIdRoute,
   AuthenticatedStoreStoreIdRoute: AuthenticatedStoreStoreIdRoute,
 }
 

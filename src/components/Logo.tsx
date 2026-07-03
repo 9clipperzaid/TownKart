@@ -4,9 +4,11 @@ import { cn } from "@/lib/utils";
 export function Logo({
   className,
   showText = true,
+  showTagline = false,
 }: {
   className?: string;
   showText?: boolean;
+  showTagline?: boolean;
 }) {
   return (
     <span className={cn("inline-flex items-center gap-2", className)} aria-label="TownKart">
@@ -16,6 +18,11 @@ export function Logo({
       {showText && (
         <span className="font-display text-xl font-extrabold tracking-tight">
           Town<span className="text-primary">Kart</span>
+        </span>
+      )}
+      {showTagline && (
+        <span className="whitespace-nowrap border-l border-border pl-2 text-[9px] font-semibold leading-3 text-muted-foreground sm:text-[10px]">
+          Nehtaur&apos;s First Online Store
         </span>
       )}
     </span>

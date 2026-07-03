@@ -2,11 +2,22 @@ import { createFileRoute, Outlet, Link, useRouterState, useNavigate } from "@tan
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Home, ClipboardList, ShoppingCart, User, MapPin, LocateFixed } from "lucide-react";
+import { toast } from "sonner";
+import {
+  Home,
+  ClipboardList,
+  ShoppingCart,
+  User,
+  MapPin,
+  LocateFixed,
+  Store,
+  Loader2,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 import { syncGoogleLoginProfile } from "@/lib/auth.functions";
+import { reverseGeocodeCoordinates } from "@/lib/maps.functions";
 import { clearPendingGooglePhone, getPendingGooglePhone } from "@/lib/auth-profile";
 import {
   getSavedDeliveryLocation,
@@ -21,16 +32,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
-    const { data } = await supabase.auth.getUser();
-    return { user: data.user ?? null };
+    // getSession reads the session persisted by the OAuth callback immediately.
+    // getUser performs a network round-trip and used to leave the whole shell
+    // blank while that request was settling just after login.
+    const { data } = await supabase.auth.getSession();
+    return { user: data.session?.user ?? null };
   },
   component: CustomerShell,
 });
 
 const TABS = [
   { to: "/home", label: "Home", icon: Home },
-  { to: "/nearby", label: "Nearby", icon: MapPin },
-  { to: "/orders", label: "Orders", icon: ClipboardList },
+  { to: "/nearby", label: "Stores", icon: Store },
+  { to: "/orders", label: "Reorders", icon: ClipboardList },
   { to: "/cart", label: "Cart", icon: ShoppingCart },
   { to: "/profile", label: "Account", icon: User },
 ] as const;
@@ -40,36 +54,54 @@ function CustomerShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const queryClient = useQueryClient();
   const syncProfile = useServerFn(syncGoogleLoginProfile);
+  const reverseGeocode = useServerFn(reverseGeocodeCoordinates);
   const isAdminArea = pathname.startsWith("/admin");
   const [locationOpen, setLocationOpen] = useState(false);
   const [manualAddress, setManualAddress] = useState("");
   const [locating, setLocating] = useState(false);
   const [guestCartCount, setGuestCartCount] = useState(() => localCartCount());
   const [guestAddress, setGuestAddress] = useState(() => getSavedDeliveryLocation()?.address ?? "");
+  const [isVerifyingAccount, setIsVerifyingAccount] = useState(() =>
+    Boolean(user && getPendingGooglePhone()),
+  );
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setIsVerifyingAccount(false);
+      return;
+    }
     const provider = user.app_metadata.provider;
     const hasGoogleIdentity = user.identities?.some((identity) => identity.provider === "google");
-    if (provider !== "google" && !hasGoogleIdentity) return;
+    if (provider !== "google" && !hasGoogleIdentity) {
+      setIsVerifyingAccount(false);
+      return;
+    }
 
     const pendingPhone = getPendingGooglePhone();
+    let redirecting = false;
+    if (pendingPhone) setIsVerifyingAccount(true);
     void syncProfile({ data: { phone: pendingPhone } })
       .then(async (result) => {
-        if (result.reason === "phone_in_use") {
+        if (result.reason === "phone_in_use" || result.reason === "phone_mismatch") {
+          redirecting = true;
           clearPendingGooglePhone();
           await supabase.auth.signOut();
-          window.location.assign("/auth/login?error=phone_in_use");
+          window.location.assign(`/auth/login?error=${result.reason}`);
           return;
         }
         clearPendingGooglePhone();
       })
-      .catch((error) => {
+      .catch(async (error) => {
         console.error("[Auth] Failed to sync authenticated profile", error);
+        redirecting = true;
+        clearPendingGooglePhone();
+        await supabase.auth.signOut();
+        window.location.assign("/auth/login?error=account_check_failed");
       })
       .finally(() => {
         queryClient.invalidateQueries({ queryKey: ["profile"] });
         queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+        if (!redirecting) setIsVerifyingAccount(false);
       });
   }, [queryClient, syncProfile, user]);
 
@@ -150,7 +182,18 @@ function CustomerShell() {
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        const addressLabel = `Current location (${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)})`;
+        let addressLabel = "Current location";
+        try {
+          const result = await reverseGeocode({
+            data: {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            },
+          });
+          addressLabel = result.formatted;
+        } catch (error) {
+          console.error("[Location] Reverse geocoding failed", error);
+        }
         saveDeliveryLocation({
           address: addressLabel,
           latitude: position.coords.latitude,
@@ -166,8 +209,28 @@ function CustomerShell() {
         setLocating(false);
         setLocationOpen(false);
       },
-      () => setLocating(false),
-      { enableHighAccuracy: true, maximumAge: 60_000, timeout: 15_000 },
+      (error) => {
+        setLocating(false);
+        toast.error(
+          error.code === error.PERMISSION_DENIED
+            ? "Allow location access in browser settings and try again."
+            : "Turn on GPS and try again.",
+        );
+      },
+      { enableHighAccuracy: true, maximumAge: 300_000, timeout: 25_000 },
+    );
+  }
+
+  if (isVerifyingAccount) {
+    return (
+      <div className="fixed inset-0 z-[100] flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
+        <Logo showTagline />
+        <Loader2 className="mt-8 h-9 w-9 animate-spin text-primary" />
+        <h1 className="mt-5 text-xl font-extrabold">Verifying your account…</h1>
+        <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+          We are checking that this phone number matches your Google account.
+        </p>
+      </div>
     );
   }
 
@@ -180,7 +243,7 @@ function CustomerShell() {
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-background lg:max-w-5xl">
       <header className="sticky top-0 z-20 border-b border-border/60 bg-background/85 px-4 py-3 backdrop-blur-md">
         <div className="mx-auto flex max-w-md items-center justify-between gap-4 lg:max-w-5xl">
-          <Logo />
+          <Logo showTagline />
           <nav className="hidden flex-1 items-center justify-center gap-1 lg:flex">
             {TABS.map((tab) => {
               const active = pathname === tab.to || pathname.startsWith(tab.to + "/");
@@ -213,16 +276,15 @@ function CustomerShell() {
           </nav>
           <button
             type="button"
+            aria-label={visibleAddress ? "View delivery address" : "Set delivery address"}
+            title={visibleAddress ? "View delivery address" : "Set delivery address"}
             onClick={() => {
               setManualAddress(visibleAddress ?? "");
               setLocationOpen(true);
             }}
-            className="flex max-w-[55%] items-center gap-1 rounded-full bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground lg:max-w-[220px]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground transition-colors hover:bg-secondary/80"
           >
-            <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
-            <span className="truncate">
-              {visibleAddress ? visibleAddress : "Set delivery address"}
-            </span>
+            <MapPin className="h-5 w-5 text-primary" />
           </button>
         </div>
       </header>

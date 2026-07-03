@@ -3,13 +3,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Package, MapPin } from "lucide-react";
+import { Package, MapPin, Minus, Plus, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cancelMyOrder } from "@/lib/order.functions";
 import { formatINR, timeAgo, ORDER_STATUS } from "@/lib/format";
 import { cn, userErrorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -20,11 +21,28 @@ import {
 
 export const Route = createFileRoute("/_authenticated/orders")({
   beforeLoad: async () => {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) throw redirect({ to: "/auth/login", search: { redirectTo: "/orders" } });
+    const { data } = await supabase.auth.getSession();
+    if (!data.session?.user)
+      throw redirect({ to: "/auth/login", search: { redirectTo: "/orders" } });
   },
+  pendingMs: 0,
+  pendingMinMs: 250,
+  pendingComponent: OrdersPageLoading,
   component: OrdersPage,
 });
+
+function OrdersPageLoading() {
+  return (
+    <div className="px-4 pt-4">
+      <div className="h-8 w-40 animate-pulse rounded-lg bg-muted" />
+      <div className="mt-4 space-y-3">
+        {[0, 1, 2].map((item) => (
+          <div key={item} className="h-36 animate-pulse rounded-2xl bg-muted" />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 type Order = {
   id: string;
@@ -33,7 +51,22 @@ type Order = {
   total: number;
   address: string;
   created_at: string;
-  order_items: { name: string; quantity: number }[];
+  order_items: {
+    id: string;
+    product_id: string | null;
+    name: string;
+    quantity: number;
+    unit_price: number;
+    products: {
+      id: string;
+      name: string;
+      unit: string;
+      price: number;
+      discount_price: number | null;
+      is_available: boolean;
+      store_id: string;
+    } | null;
+  }[];
 };
 
 function OrdersPage() {
@@ -41,13 +74,19 @@ function OrdersPage() {
   const cancelOrder = useServerFn(cancelMyOrder);
   const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [reorderTarget, setReorderTarget] = useState<Order | null>(null);
+  const [reorderItems, setReorderItems] = useState<
+    Record<string, { selected: boolean; quantity: number }>
+  >({});
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["orders"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("*, order_items(name, quantity)")
+        .select(
+          "*, order_items(id, product_id, name, quantity, unit_price, products(id, name, unit, price, discount_price, is_available, store_id))",
+        )
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as unknown as Order[];
@@ -69,6 +108,61 @@ function OrdersPage() {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
     },
     onError: (e) => toast.error(userErrorMessage(e, "Could not cancel order")),
+  });
+
+  const openReorder = (order: Order) => {
+    setReorderTarget(order);
+    setReorderItems(
+      Object.fromEntries(
+        order.order_items.map((item) => [
+          item.id,
+          { selected: Boolean(item.products?.is_available), quantity: item.quantity },
+        ]),
+      ),
+    );
+  };
+
+  const reorderMutation = useMutation({
+    mutationFn: async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !reorderTarget) throw new Error("Please sign in again.");
+      const chosen = reorderTarget.order_items.filter(
+        (item) => item.products && reorderItems[item.id]?.selected,
+      );
+      for (const item of chosen) {
+        const product = item.products!;
+        const selectedUnit = product.unit || "1 unit";
+        const quantity = reorderItems[item.id].quantity;
+        const { data: existing } = await supabase
+          .from("cart_items")
+          .select("quantity")
+          .eq("user_id", user.id)
+          .eq("product_id", product.id)
+          .eq("selected_unit", selectedUnit)
+          .maybeSingle();
+        const { error } = await supabase.from("cart_items").upsert(
+          {
+            user_id: user.id,
+            product_id: product.id,
+            selected_unit: selectedUnit,
+            unit_price: Number(product.discount_price ?? product.price),
+            quantity: Number(existing?.quantity ?? 0) + quantity,
+          } as never,
+          { onConflict: "user_id,product_id,selected_unit" },
+        );
+        if (error) throw error;
+      }
+      return chosen.length;
+    },
+    onSuccess: (count) => {
+      toast.success(`${count} product${count === 1 ? "" : "s"} added to cart`);
+      setReorderTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["cart-count"] });
+      queryClient.invalidateQueries({ queryKey: ["cart-detail"] });
+    },
+    onError: (error) => toast.error(userErrorMessage(error, "Could not reorder")),
   });
 
   if (!isLoading && orders.length === 0) {
@@ -146,6 +240,9 @@ function OrdersPage() {
                           Cancel
                         </Button>
                       )}
+                      <Button type="button" size="sm" onClick={() => openReorder(order)}>
+                        <RotateCcw className="h-3.5 w-3.5" /> Reorder
+                      </Button>
                       <span className="font-extrabold">{formatINR(order.total)}</span>
                     </div>
                   </div>
@@ -194,6 +291,100 @@ function OrdersPage() {
               onClick={() => cancelMutation.mutate()}
             >
               {cancelMutation.isPending ? "Cancelling..." : "Cancel order"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!reorderTarget} onOpenChange={(open) => !open && setReorderTarget(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Choose products to reorder</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Select only the products you want to add to your cart.
+          </p>
+          <div className="space-y-2">
+            {reorderTarget?.order_items.map((item) => {
+              const available = Boolean(item.products?.is_available);
+              const state = reorderItems[item.id] ?? { selected: false, quantity: item.quantity };
+              return (
+                <div
+                  key={item.id}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl border p-3",
+                    !available && "opacity-55",
+                  )}
+                >
+                  <Checkbox
+                    disabled={!available}
+                    checked={state.selected}
+                    onCheckedChange={(checked) =>
+                      setReorderItems((current) => ({
+                        ...current,
+                        [item.id]: { ...state, selected: checked === true },
+                      }))
+                    }
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {available
+                        ? formatINR(
+                            Number(
+                              item.products?.discount_price ??
+                                item.products?.price ??
+                                item.unit_price,
+                            ),
+                          )
+                        : "Product unavailable"}
+                    </p>
+                  </div>
+                  <div className="flex items-center rounded-lg border">
+                    <button
+                      type="button"
+                      className="p-2"
+                      disabled={!available || state.quantity <= 1}
+                      onClick={() =>
+                        setReorderItems((current) => ({
+                          ...current,
+                          [item.id]: { ...state, quantity: Math.max(1, state.quantity - 1) },
+                        }))
+                      }
+                    >
+                      <Minus className="h-3 w-3" />
+                    </button>
+                    <span className="w-6 text-center text-xs font-bold">{state.quantity}</span>
+                    <button
+                      type="button"
+                      className="p-2"
+                      disabled={!available}
+                      onClick={() =>
+                        setReorderItems((current) => ({
+                          ...current,
+                          [item.id]: { ...state, quantity: state.quantity + 1 },
+                        }))
+                      }
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReorderTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                reorderMutation.isPending ||
+                !Object.values(reorderItems).some((item) => item.selected)
+              }
+              onClick={() => reorderMutation.mutate()}
+            >
+              {reorderMutation.isPending ? "Adding..." : "Add selected to cart"}
             </Button>
           </DialogFooter>
         </DialogContent>

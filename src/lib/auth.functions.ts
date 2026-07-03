@@ -139,7 +139,7 @@ export const syncGoogleLoginProfile = createServerFn({ method: "POST" })
 
     const { data: existing } = await supabaseAdmin
       .from("profiles")
-      .select("id, full_name, phone")
+      .select("id, full_name, phone, email")
       .eq("id", context.userId)
       .maybeSingle();
 
@@ -159,11 +159,19 @@ export const syncGoogleLoginProfile = createServerFn({ method: "POST" })
 
     if (!phone) return { ok: true, phoneSaved: false, reason: "missing_phone" as const };
 
-    const { data: phoneOwner } = await supabaseAdmin
+    // Once a Google account has a number, it cannot be silently relinked to a
+    // different one on a later login.
+    if (existing?.phone && normalizePhone(existing.phone) !== phone) {
+      return { ok: true, phoneSaved: false, reason: "phone_mismatch" as const };
+    }
+
+    const { data: phoneOwners, error: phoneOwnerError } = await supabaseAdmin
       .from("profiles")
       .select("id")
       .eq("phone", phone)
-      .maybeSingle();
+      .limit(1);
+    if (phoneOwnerError) throw new Error(phoneOwnerError.message);
+    const phoneOwner = phoneOwners?.[0];
 
     if (phoneOwner && phoneOwner.id !== context.userId) {
       return { ok: true, phoneSaved: false, reason: "phone_in_use" as const };
