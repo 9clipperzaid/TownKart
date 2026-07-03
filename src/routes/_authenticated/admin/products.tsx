@@ -631,9 +631,11 @@ function ProductsPage() {
                   <PopoverContent
                     align="start"
                     onOpenAutoFocus={(event) => event.preventDefault()}
+                    onWheel={(event) => event.stopPropagation()}
+                    onTouchMove={(event) => event.stopPropagation()}
                     className="w-[calc(100vw-2rem)] max-w-[35rem] p-1"
                   >
-                    <div className="max-h-64 overflow-y-auto">
+                    <div className="max-h-[min(16rem,50vh)] touch-pan-y overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
                       <button
                         type="button"
                         onClick={() => {
