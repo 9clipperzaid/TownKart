@@ -631,7 +631,7 @@ function ProductsPage() {
                   <PopoverContent
                     align="start"
                     onOpenAutoFocus={(event) => event.preventDefault()}
-                    className="w-[var(--radix-popover-anchor-width)] p-1"
+                    className="w-[calc(100vw-2rem)] max-w-[35rem] p-1"
                   >
                     <div className="max-h-64 overflow-y-auto">
                       <button
