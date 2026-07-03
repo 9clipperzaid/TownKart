@@ -56,12 +56,20 @@ type Category = {
   image_url: string | null;
 };
 
+type Subcategory = {
+  id: string;
+  category_id: string;
+  key: string;
+  label: string;
+  image_url: string | null;
+};
+
 type CategorySection = {
   id: string;
   title: string;
   display_order: number;
   rows: 1 | 2;
-  category_section_items: { category_id: string; display_order: number }[];
+  subcategory_section_items: { subcategory_id: string; display_order: number }[];
 };
 
 type HomeBanner = {
@@ -127,6 +135,21 @@ function HomePage() {
         .order("sort_order", { ascending: true });
       if (error) throw error;
       return data as Category[];
+    },
+  });
+
+  const { data: subcategories = [] } = useQuery({
+    queryKey: ["subcategories"],
+    queryFn: async () => {
+      const db = supabase as any;
+      const { data, error } = await db
+        .from("subcategories")
+        .select("id, category_id, key, label, image_url")
+        .eq("is_enabled", true)
+        .order("sort_order", { ascending: true });
+      if (error?.code === "42P01") return [];
+      if (error) throw error;
+      return data as Subcategory[];
     },
   });
 
@@ -462,38 +485,40 @@ function HomePage() {
       </section>
 
       {categorySections.map((section) => {
-        const tiles = [...section.category_section_items]
+        const tiles = [...section.subcategory_section_items]
           .sort((a, b) => a.display_order - b.display_order)
-          .map((item) => categories.find((category) => category.id === item.category_id))
-          .filter((category): category is Category => Boolean(category))
+          .map((item) =>
+            subcategories.find((subcategory) => subcategory.id === item.subcategory_id),
+          )
+          .filter((subcategory): subcategory is Subcategory => Boolean(subcategory))
           .slice(0, section.rows * 4);
         if (!tiles.length) return null;
         return (
           <section key={section.id} className="order-2 px-4 pb-4 pt-6">
             <h2 className="mb-3 text-lg font-bold">{section.title}</h2>
             <div className="grid grid-cols-4 gap-x-2.5 gap-y-5">
-              {tiles.map((category) => (
+              {tiles.map((subcategory) => (
                 <Link
-                  key={category.id}
+                  key={subcategory.id}
                   to="/category/$categoryKey"
-                  params={{ categoryKey: category.key }}
+                  params={{ categoryKey: subcategory.key }}
                   className="min-w-0 text-center"
                 >
                   <div className="aspect-square overflow-hidden rounded-2xl bg-secondary/70">
-                    {category.image_url ? (
+                    {subcategory.image_url ? (
                       <img
-                        src={category.image_url}
-                        alt={category.label}
+                        src={subcategory.image_url}
+                        alt={subcategory.label}
                         className="h-full w-full object-cover"
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center text-3xl sm:text-5xl">
-                        {category.emoji ?? "◻"}
+                        No image
                       </div>
                     )}
                   </div>
                   <p className="mt-2 line-clamp-2 text-xs font-bold leading-tight sm:text-sm">
-                    {category.label}
+                    {subcategory.label}
                   </p>
                 </Link>
               ))}

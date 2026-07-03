@@ -466,6 +466,73 @@ export const adminDeleteCategory = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const adminListSubcategories = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { data, error } = await db
+      .from("subcategories")
+      .select("*, categories(id, label, key)")
+      .order("sort_order", { ascending: true });
+    if (error?.code === "42P01") return [];
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
+
+const subcategorySchema = z.object({
+  id: z.string().uuid().optional(),
+  category_id: z.string().uuid(),
+  key: z
+    .string()
+    .trim()
+    .min(2)
+    .max(60)
+    .regex(/^[a-z0-9_-]+$/),
+  label: z.string().trim().min(1).max(80),
+  image_url: z.string().trim().max(500).optional().nullable(),
+  description: z.string().trim().max(300).optional().nullable(),
+  sort_order: z.number().int().min(0).max(9999),
+  is_enabled: z.boolean(),
+});
+
+export const adminSaveSubcategory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) => subcategorySchema.parse(value))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const payload = {
+      category_id: data.category_id,
+      key: data.key,
+      label: data.label,
+      image_url: data.image_url ?? null,
+      description: data.description ?? null,
+      sort_order: data.sort_order,
+      is_enabled: data.is_enabled,
+      updated_at: new Date().toISOString(),
+    };
+    const query = data.id
+      ? db.from("subcategories").update(payload).eq("id", data.id)
+      : db.from("subcategories").insert(payload);
+    const { data: row, error } = await query.select("id").single();
+    if (error) throw new Error(error.message);
+    await logAction(context.userId, data.id ? "update" : "create", "subcategory", row.id, payload);
+    return { id: row.id as string };
+  });
+
+export const adminDeleteSubcategory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: { id: string }) => z.object({ id: z.string().uuid() }).parse(value))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { error } = await db.from("subcategories").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await logAction(context.userId, "delete", "subcategory", data.id);
+    return { ok: true };
+  });
+
 // ---------------------------------------------------------------------------
 // Stores
 // ---------------------------------------------------------------------------
@@ -594,6 +661,7 @@ const productSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(500).optional().nullable(),
   category: z.string().trim().max(40).optional().nullable(),
+  subcategory_id: z.string().uuid().optional().nullable(),
   image_url: z.string().trim().max(500).optional().nullable(),
   price: z.number().min(0).max(1000000),
   discount_price: z.number().min(0).max(1000000).optional().nullable(),
@@ -621,7 +689,7 @@ export const adminSaveProduct = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => productSchema.parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
-    const supabaseAdmin = await getAdmin();
+    const supabaseAdmin = (await getAdmin()) as any;
     const { id, ...rest } = data;
     const payload = {
       ...rest,
@@ -901,7 +969,10 @@ export const adminListCategorySections = createServerFn({ method: "GET" })
       .eq("key", "category_sections")
       .maybeSingle();
     if (error) throw new Error(error.message);
-    return (data?.value?.sections ?? []) as any[];
+    return ((data?.value?.sections ?? []) as any[]).map((section) => ({
+      ...section,
+      subcategory_section_items: section.subcategory_section_items ?? [],
+    }));
   });
 
 export const getCategorySections = createServerFn({ method: "GET" }).handler(async () => {
@@ -912,6 +983,10 @@ export const getCategorySections = createServerFn({ method: "GET" }).handler(asy
     .eq("key", "category_sections")
     .maybeSingle();
   return ((data?.value?.sections ?? []) as any[])
+    .map((section) => ({
+      ...section,
+      subcategory_section_items: section.subcategory_section_items ?? [],
+    }))
     .filter((section) => section.is_active)
     .sort((a, b) => a.display_order - b.display_order);
 });
@@ -922,7 +997,7 @@ const categorySectionSchema = z.object({
   display_order: z.number().int().min(0).max(1000000),
   rows: z.union([z.literal(1), z.literal(2)]),
   is_active: z.boolean(),
-  category_ids: z.array(z.string().uuid()).max(8),
+  subcategory_ids: z.array(z.string().uuid()).max(8),
 });
 
 export const adminSaveCategorySection = createServerFn({ method: "POST" })
@@ -944,9 +1019,9 @@ export const adminSaveCategorySection = createServerFn({ method: "POST" })
       display_order: data.display_order,
       rows: data.rows,
       is_active: data.is_active,
-      category_section_items: data.category_ids.map((category_id, index) => ({
-        id: `${id}-${category_id}`,
-        category_id,
+      subcategory_section_items: data.subcategory_ids.map((subcategory_id, index) => ({
+        id: `${id}-${subcategory_id}`,
+        subcategory_id,
         display_order: index + 1,
       })),
     };

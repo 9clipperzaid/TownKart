@@ -11,6 +11,7 @@ import {
   adminSaveProduct,
   adminDeleteProduct,
   adminListCategories,
+  adminListSubcategories,
   adminPriceHistory,
 } from "@/lib/admin.functions";
 import { formatINR } from "@/lib/format";
@@ -46,6 +47,7 @@ type ProductRow = {
   name: string;
   description: string | null;
   category: string | null;
+  subcategory_id: string | null;
   image_url: string | null;
   price: number;
   discount_price: number | null;
@@ -68,6 +70,7 @@ type FormState = {
   name: string;
   description: string;
   category: string;
+  subcategory_id: string;
   image_url: string;
   price: number;
   discount_price: string;
@@ -107,6 +110,7 @@ function emptyForm(storeId: string): FormState {
     name: "",
     description: "",
     category: "",
+    subcategory_id: "",
     image_url: "",
     price: 0,
     discount_price: "",
@@ -127,6 +131,7 @@ function ProductsPage() {
   const listStores = useServerFn(adminListStores);
   const listProducts = useServerFn(adminListProducts);
   const listCats = useServerFn(adminListCategories);
+  const listSubcategories = useServerFn(adminListSubcategories);
   const save = useServerFn(adminSaveProduct);
   const bulkImport = useServerFn(adminBulkImportProducts);
   const remove = useServerFn(adminDeleteProduct);
@@ -146,7 +151,12 @@ function ProductsPage() {
   });
   const { data: categories = [] } = useQuery({
     queryKey: ["admin-categories"],
-    queryFn: () => listCats() as Promise<{ key: string; label: string }[]>,
+    queryFn: () => listCats() as Promise<{ id: string; key: string; label: string }[]>,
+  });
+  const { data: subcategories = [] } = useQuery({
+    queryKey: ["admin-subcategories"],
+    queryFn: () =>
+      listSubcategories() as Promise<{ id: string; category_id: string; label: string }[]>,
   });
   const { data: products = [], isLoading } = useQuery({
     queryKey: ["admin-products", storeFilter],
@@ -180,6 +190,7 @@ function ProductsPage() {
           name: f.name,
           description: f.description || null,
           category: f.category || null,
+          subcategory_id: f.subcategory_id || null,
           image_url: f.image_url || null,
           price: Number(f.price) || 0,
           discount_price: f.discount_price ? Number(f.discount_price) : null,
@@ -477,6 +488,7 @@ function ProductsPage() {
                             name: p.name,
                             description: p.description ?? "",
                             category: p.category ?? "",
+                            subcategory_id: p.subcategory_id ?? "",
                             image_url: p.image_url ?? "",
                             price: Number(p.price),
                             discount_price:
@@ -566,6 +578,36 @@ function ProductsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Subcategory</Label>
+                <Select
+                  value={form.subcategory_id || "none"}
+                  onValueChange={(value) =>
+                    setForm({ ...form, subcategory_id: value === "none" ? "" : value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose subcategory" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {subcategories
+                      .filter((subcategory) => {
+                        const parent = categories.find(
+                          (category) => category.id === subcategory.category_id,
+                        );
+                        return !form.category || parent?.key === form.category;
+                      })
+                      .map((subcategory) => (
+                        <SelectItem key={subcategory.id} value={subcategory.id}>
+                          {subcategory.label}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Used by home subcategory tiles.</p>
               </div>
 
               <div className="space-y-3 rounded-xl border border-border/60 p-3">

@@ -6,7 +6,7 @@ import { ArrowDown, ArrowUp, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   adminDeleteCategorySection,
-  adminListCategories,
+  adminListSubcategories,
   adminListCategorySections,
   adminSaveCategorySection,
 } from "@/lib/admin.functions";
@@ -17,14 +17,19 @@ import { Switch } from "@/components/ui/switch";
 export const Route = createFileRoute("/_authenticated/admin/category-sections")({
   component: CategorySectionsPage,
 });
-type Category = { id: string; label: string; emoji: string | null; image_url: string | null };
+type Subcategory = {
+  id: string;
+  label: string;
+  image_url: string | null;
+  categories: { label: string } | null;
+};
 type Section = {
   id: string;
   title: string;
   display_order: number;
   rows: 1 | 2;
   is_active: boolean;
-  category_section_items: { category_id: string; display_order: number }[];
+  subcategory_section_items: { subcategory_id: string; display_order: number }[];
 };
 type Draft = {
   id?: string;
@@ -32,13 +37,13 @@ type Draft = {
   display_order: number;
   rows: 1 | 2;
   is_active: boolean;
-  category_ids: string[];
+  subcategory_ids: string[];
 };
 
 function CategorySectionsPage() {
   const qc = useQueryClient();
   const list = useServerFn(adminListCategorySections);
-  const listCategories = useServerFn(adminListCategories);
+  const listSubcategories = useServerFn(adminListSubcategories);
   const save = useServerFn(adminSaveCategorySection);
   const remove = useServerFn(adminDeleteCategorySection);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -46,9 +51,9 @@ function CategorySectionsPage() {
     queryKey: ["admin-category-sections"],
     queryFn: () => list() as Promise<Section[]>,
   });
-  const { data: categories = [] } = useQuery({
-    queryKey: ["admin-categories"],
-    queryFn: () => listCategories() as Promise<Category[]>,
+  const { data: subcategories = [] } = useQuery({
+    queryKey: ["admin-subcategories"],
+    queryFn: () => listSubcategories() as Promise<Subcategory[]>,
   });
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["admin-category-sections"] });
@@ -72,11 +77,11 @@ function CategorySectionsPage() {
   const move = (index: number, dir: -1 | 1) =>
     setDraft((current) => {
       if (!current) return current;
-      const ids = [...current.category_ids],
+      const ids = [...current.subcategory_ids],
         to = index + dir;
       if (to < 0 || to >= ids.length) return current;
       [ids[index], ids[to]] = [ids[to], ids[index]];
-      return { ...current, category_ids: ids };
+      return { ...current, subcategory_ids: ids };
     });
   return (
     <div className="space-y-6">
@@ -95,7 +100,7 @@ function CategorySectionsPage() {
               display_order: (sections.at(-1)?.display_order ?? 0) + 1,
               rows: 2,
               is_active: true,
-              category_ids: [],
+              subcategory_ids: [],
             })
           }
         >
@@ -134,7 +139,7 @@ function CategorySectionsPage() {
             <Button
               variant={draft.rows === 1 ? "default" : "outline"}
               onClick={() =>
-                setDraft({ ...draft, rows: 1, category_ids: draft.category_ids.slice(0, 4) })
+                setDraft({ ...draft, rows: 1, subcategory_ids: draft.subcategory_ids.slice(0, 4) })
               }
             >
               1 row × 4
@@ -147,11 +152,19 @@ function CategorySectionsPage() {
             </Button>
           </div>
           <div className="grid grid-cols-4 gap-2">
-            {draft.category_ids.map((id, index) => {
-              const c = categories.find((x) => x.id === id);
+            {draft.subcategory_ids.map((id, index) => {
+              const c = subcategories.find((x) => x.id === id);
               return c ? (
                 <div key={id} className="rounded-xl border p-2 text-center">
-                  <div className="text-2xl">{c.emoji || "◻"}</div>
+                  {c.image_url ? (
+                    <img
+                      src={c.image_url}
+                      alt=""
+                      className="mx-auto h-14 w-14 rounded-xl object-cover"
+                    />
+                  ) : (
+                    <div className="text-xs text-muted-foreground">No image</div>
+                  )}
                   <p className="truncate text-xs font-bold">{c.label}</p>
                   <div className="mt-2 flex justify-center gap-1">
                     <Button
@@ -165,7 +178,7 @@ function CategorySectionsPage() {
                     <Button
                       size="icon"
                       variant="outline"
-                      disabled={index === draft.category_ids.length - 1}
+                      disabled={index === draft.subcategory_ids.length - 1}
                       onClick={() => move(index, 1)}
                     >
                       <ArrowDown className="h-3 w-3" />
@@ -176,7 +189,7 @@ function CategorySectionsPage() {
                       onClick={() =>
                         setDraft({
                           ...draft,
-                          category_ids: draft.category_ids.filter((x) => x !== id),
+                          subcategory_ids: draft.subcategory_ids.filter((x) => x !== id),
                         })
                       }
                     >
@@ -189,22 +202,22 @@ function CategorySectionsPage() {
           </div>
           <div>
             <p className="mb-2 text-sm font-bold">
-              Add categories ({draft.category_ids.length}/{draft.rows * 4})
+              Add subcategories ({draft.subcategory_ids.length}/{draft.rows * 4})
             </p>
             <div className="flex flex-wrap gap-2">
-              {categories
-                .filter((c) => !draft.category_ids.includes(c.id))
+              {subcategories
+                .filter((c) => !draft.subcategory_ids.includes(c.id))
                 .map((c) => (
                   <Button
                     key={c.id}
                     size="sm"
                     variant="outline"
-                    disabled={draft.category_ids.length >= draft.rows * 4}
+                    disabled={draft.subcategory_ids.length >= draft.rows * 4}
                     onClick={() =>
-                      setDraft({ ...draft, category_ids: [...draft.category_ids, c.id] })
+                      setDraft({ ...draft, subcategory_ids: [...draft.subcategory_ids, c.id] })
                     }
                   >
-                    {c.emoji} {c.label}
+                    {c.label} ({c.categories?.label})
                   </Button>
                 ))}
             </div>
@@ -228,7 +241,7 @@ function CategorySectionsPage() {
             <div className="flex-1">
               <h2 className="font-bold">{s.title}</h2>
               <p className="text-xs text-muted-foreground">
-                {s.rows} row · {s.category_section_items.length} categories ·{" "}
+                {s.rows} row · {s.subcategory_section_items.length} subcategories ·{" "}
                 {s.is_active ? "Visible" : "Hidden"}
               </p>
             </div>
@@ -242,9 +255,9 @@ function CategorySectionsPage() {
                   display_order: s.display_order,
                   rows: s.rows,
                   is_active: s.is_active,
-                  category_ids: [...s.category_section_items]
+                  subcategory_ids: [...s.subcategory_section_items]
                     .sort((a, b) => a.display_order - b.display_order)
-                    .map((i) => i.category_id),
+                    .map((i) => i.subcategory_id),
                 })
               }
             >

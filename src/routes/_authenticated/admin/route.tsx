@@ -54,6 +54,7 @@ const NAV = [
   { to: "/admin/orders", label: "Orders", icon: ClipboardList },
   { to: "/admin/call-orders", label: "Call Orders", icon: PhoneCall },
   { to: "/admin/categories", label: "Categories", icon: Tags },
+  { to: "/admin/subcategories", label: "Subcategories", icon: Grid2X2 },
   { to: "/admin/stores", label: "Stores", icon: Store },
   { to: "/admin/products", label: "Products", icon: Package },
   { to: "/admin/popular-products", label: "Product Sections", icon: Rows3 },

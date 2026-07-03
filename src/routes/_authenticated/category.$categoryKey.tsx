@@ -16,6 +16,7 @@ type Product = {
   unit: string;
   image_url: string | null;
   category: string | null;
+  subcategory_id: string | null;
   stores: { name: string; category: string } | null;
 };
 function CategoryProductsPage() {
@@ -33,18 +34,36 @@ function CategoryProductsPage() {
       return data;
     },
   });
+  const { data: subcategory, isLoading: isSubcategoryLoading } = useQuery({
+    queryKey: ["subcategory", categoryKey],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("subcategories")
+        .select("id,label,image_url")
+        .eq("key", categoryKey)
+        .eq("is_enabled", true)
+        .maybeSingle();
+      if (error?.code === "42P01") return null;
+      if (error) throw error;
+      return data as { id: string; label: string; image_url: string | null } | null;
+    },
+  });
   const { data: products = [], isLoading } = useQuery({
-    queryKey: ["category-products", categoryKey],
+    queryKey: ["category-products", categoryKey, subcategory?.id],
+    enabled: !isSubcategoryLoading,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
-        .select("id,store_id,name,price,unit,image_url,category,stores(name,category)")
+        .select(
+          "id,store_id,name,price,unit,image_url,category,subcategory_id,stores(name,category)",
+        )
         .eq("is_available", true);
       if (error) throw error;
-      return (data as Product[]).filter(
-        (p) =>
-          p.category?.toLowerCase() === categoryKey.toLowerCase() ||
-          p.stores?.category?.toLowerCase() === categoryKey.toLowerCase(),
+      return (data as Product[]).filter((p) =>
+        subcategory
+          ? p.subcategory_id === subcategory.id
+          : p.category?.toLowerCase() === categoryKey.toLowerCase() ||
+            p.stores?.category?.toLowerCase() === categoryKey.toLowerCase(),
       );
     },
   });
@@ -70,7 +89,7 @@ function CategoryProductsPage() {
         </Link>
         <div>
           <h1 className="text-2xl font-extrabold">
-            {category?.emoji} {category?.label ?? categoryKey}
+            {!subcategory && category?.emoji} {subcategory?.label ?? category?.label ?? categoryKey}
           </h1>
           <p className="text-sm text-muted-foreground">Products from this category.</p>
         </div>
