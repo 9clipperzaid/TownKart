@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/format";
+import { ProductQuickAdd } from "@/components/ProductQuickAdd";
 
 export const Route = createFileRoute("/_authenticated/product-sections/$sectionId")({
   component: ProductSectionPage,
@@ -16,6 +17,8 @@ type Product = {
   price: number;
   unit: string;
   image_url: string | null;
+  has_unit_options: boolean;
+  unit_options: { label: string; unitPrice: number }[] | null;
   stores: { name: string } | null;
 };
 
@@ -38,7 +41,7 @@ function ProductSectionPage() {
       const { data, error } = await db
         .from("product_sections")
         .select(
-          "id, title, product_section_items(display_order, products(id, store_id, name, price, unit, image_url, is_available, stores(name)))",
+          "id, title, product_section_items(display_order, products(id, store_id, name, price, unit, image_url, is_available, has_unit_options, unit_options, stores(name)))",
         )
         .eq("id", sectionId)
         .eq("is_active", true)
@@ -114,33 +117,38 @@ function ProductSectionPage() {
       ) : (
         <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
           {visibleProducts.map((product) => (
-            <Link
+            <div
               key={product.id}
-              to="/store/$storeId"
-              params={{ storeId: product.store_id }}
               className="rounded-xl border border-border/70 bg-card p-2 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-pop"
             >
-              {product.image_url ? (
-                <img
-                  src={product.image_url}
-                  alt={product.name}
-                  className="aspect-square w-full rounded-lg object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-secondary text-xl font-extrabold text-primary">
-                  TK
-                </div>
-              )}
-              <p className="mt-1.5 text-[10px] font-medium text-muted-foreground">{product.unit}</p>
-              <h3 className="line-clamp-2 min-h-8 text-xs font-semibold leading-tight">
-                {product.name}
-              </h3>
-              <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">
-                {product.stores?.name ?? "TownKart store"}
-              </p>
-              <p className="mt-0.5 text-xs font-extrabold">{formatINR(Number(product.price))}</p>
-            </Link>
+              <Link to="/product/$productId" params={{ productId: product.id }} className="block">
+                {product.image_url ? (
+                  <img
+                    src={product.image_url}
+                    alt={product.name}
+                    className="aspect-square w-full rounded-lg object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-secondary text-xl font-extrabold text-primary">
+                    TK
+                  </div>
+                )}
+                <p className="mt-1.5 text-[10px] font-medium text-muted-foreground">
+                  {product.unit}
+                </p>
+                <h3 className="line-clamp-2 min-h-8 text-xs font-semibold leading-tight">
+                  {product.name}
+                </h3>
+                <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">
+                  {product.stores?.name ?? "TownKart store"}
+                </p>
+              </Link>
+              <div className="mt-1 flex items-center justify-between gap-1">
+                <p className="text-xs font-extrabold">{formatINR(Number(product.price))}</p>
+                <ProductQuickAdd product={product} />
+              </div>
+            </div>
           ))}
         </div>
       )}

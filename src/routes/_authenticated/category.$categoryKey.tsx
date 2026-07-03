@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/format";
+import { ProductQuickAdd } from "@/components/ProductQuickAdd";
 
 export const Route = createFileRoute("/_authenticated/category/$categoryKey")({
   component: CategoryProductsPage,
@@ -17,6 +18,8 @@ type Product = {
   image_url: string | null;
   category: string | null;
   subcategory_id: string | null;
+  has_unit_options: boolean;
+  unit_options: { label: string; unitPrice: number }[] | null;
   stores: { name: string; category: string } | null;
 };
 function CategoryProductsPage() {
@@ -55,7 +58,7 @@ function CategoryProductsPage() {
       const { data, error } = await supabase
         .from("products")
         .select(
-          "id,store_id,name,price,unit,image_url,category,subcategory_id,stores(name,category)",
+          "id,store_id,name,price,unit,image_url,category,subcategory_id,has_unit_options,unit_options,stores(name,category)",
         )
         .eq("is_available", true);
       if (error) throw error;
@@ -116,28 +119,28 @@ function CategoryProductsPage() {
       ) : (
         <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
           {visible.map((p) => (
-            <Link
-              key={p.id}
-              to="/store/$storeId"
-              params={{ storeId: p.store_id }}
-              className="rounded-xl border bg-card p-2 shadow-card"
-            >
-              {p.image_url ? (
-                <img
-                  src={p.image_url}
-                  alt={p.name}
-                  className="aspect-square w-full rounded-lg object-cover"
-                />
-              ) : (
-                <div className="flex aspect-square items-center justify-center rounded-lg bg-secondary font-bold text-primary">
-                  TK
-                </div>
-              )}
-              <p className="mt-1 text-[10px] text-muted-foreground">{p.unit}</p>
-              <h3 className="line-clamp-2 min-h-8 text-xs font-semibold">{p.name}</h3>
-              <p className="truncate text-[10px] text-muted-foreground">{p.stores?.name}</p>
-              <p className="text-xs font-extrabold">{formatINR(Number(p.price))}</p>
-            </Link>
+            <div key={p.id} className="rounded-xl border bg-card p-2 shadow-card">
+              <Link to="/product/$productId" params={{ productId: p.id }} className="block">
+                {p.image_url ? (
+                  <img
+                    src={p.image_url}
+                    alt={p.name}
+                    className="aspect-square w-full rounded-lg object-cover"
+                  />
+                ) : (
+                  <div className="flex aspect-square items-center justify-center rounded-lg bg-secondary font-bold text-primary">
+                    TK
+                  </div>
+                )}
+                <p className="mt-1 text-[10px] text-muted-foreground">{p.unit}</p>
+                <h3 className="line-clamp-2 min-h-8 text-xs font-semibold">{p.name}</h3>
+                <p className="truncate text-[10px] text-muted-foreground">{p.stores?.name}</p>
+              </Link>
+              <div className="mt-1 flex items-center justify-between gap-1">
+                <p className="text-xs font-extrabold">{formatINR(Number(p.price))}</p>
+                <ProductQuickAdd product={p} />
+              </div>
+            </div>
           ))}
         </div>
       )}
