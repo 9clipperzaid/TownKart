@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Download, History, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { ChevronDown, Download, History, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   adminBulkImportProducts,
@@ -36,6 +36,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ImageUpload } from "@/components/ImageUpload";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 
 export const Route = createFileRoute("/_authenticated/admin/products")({
   component: ProductsPage,
@@ -141,6 +142,8 @@ function ProductsPage() {
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [q, setQ] = useState("");
   const [form, setForm] = useState<FormState | null>(null);
+  const [subcategoryOpen, setSubcategoryOpen] = useState(false);
+  const [subcategoryQuery, setSubcategoryQuery] = useState("");
   const [importStoreId, setImportStoreId] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [historyFor, setHistoryFor] = useState<ProductRow | null>(null);
@@ -240,6 +243,12 @@ function ProductsPage() {
   });
 
   const filtered = products.filter((p) => !q || p.name.toLowerCase().includes(q.toLowerCase()));
+  const matchingSubcategories = subcategories.filter((subcategory) => {
+    const parent = categories.find((category) => category.id === subcategory.category_id);
+    return `${subcategory.label} ${parent?.label ?? ""}`
+      .toLowerCase()
+      .includes(subcategoryQuery.trim().toLowerCase());
+  });
 
   const canCreate = stores.length > 0;
   const selectedImportStore =
@@ -582,32 +591,89 @@ function ProductsPage() {
 
               <div className="space-y-1.5">
                 <Label>Subcategory</Label>
-                <Select
-                  value={form.subcategory_id || "none"}
-                  onValueChange={(value) =>
-                    setForm({ ...form, subcategory_id: value === "none" ? "" : value })
-                  }
+                <Popover
+                  open={subcategoryOpen}
+                  onOpenChange={(open) => {
+                    setSubcategoryOpen(open);
+                    if (open) setSubcategoryQuery("");
+                  }}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose subcategory" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {subcategories
-                      .filter((subcategory) => {
+                  <PopoverAnchor asChild>
+                    <div className="relative">
+                      <Input
+                        value={
+                          subcategoryOpen
+                            ? subcategoryQuery
+                            : (subcategories.find((item) => item.id === form.subcategory_id)
+                                ?.label ?? "")
+                        }
+                        onFocus={() => setSubcategoryOpen(true)}
+                        onClick={() => setSubcategoryOpen(true)}
+                        onChange={(event) => {
+                          setSubcategoryQuery(event.target.value);
+                          setSubcategoryOpen(true);
+                        }}
+                        placeholder="None — type to search"
+                        autoComplete="off"
+                        className="h-11 pr-10"
+                      />
+                      <button
+                        type="button"
+                        aria-label="Show subcategories"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => setSubcategoryOpen(true)}
+                        className="absolute right-0 top-0 flex h-11 w-10 items-center justify-center text-muted-foreground"
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </PopoverAnchor>
+                  <PopoverContent
+                    align="start"
+                    onOpenAutoFocus={(event) => event.preventDefault()}
+                    className="w-[var(--radix-popover-anchor-width)] p-1"
+                  >
+                    <div className="max-h-64 overflow-y-auto">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForm({ ...form, subcategory_id: "" });
+                          setSubcategoryOpen(false);
+                        }}
+                        className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-accent"
+                      >
+                        None
+                      </button>
+                      {matchingSubcategories.map((subcategory) => {
                         const parent = categories.find(
                           (category) => category.id === subcategory.category_id,
                         );
-                        return !form.category || parent?.key === form.category;
-                      })
-                      .map((subcategory) => (
-                        <SelectItem key={subcategory.id} value={subcategory.id}>
-                          {subcategory.label}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Used by home subcategory tiles.</p>
+                        return (
+                          <button
+                            type="button"
+                            key={subcategory.id}
+                            onClick={() => {
+                              setForm({ ...form, subcategory_id: subcategory.id });
+                              setSubcategoryOpen(false);
+                            }}
+                            className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-accent"
+                          >
+                            {subcategory.label}
+                            {parent ? ` — ${parent.label}` : ""}
+                          </button>
+                        );
+                      })}
+                      {matchingSubcategories.length === 0 && (
+                        <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+                          No matching subcategory
+                        </p>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <p className="text-xs text-muted-foreground">
+                  Choose the home tile where this product should appear.
+                </p>
               </div>
 
               <div className="space-y-3 rounded-xl border border-border/60 p-3">
