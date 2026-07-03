@@ -190,7 +190,7 @@ function StorePage() {
           size="icon"
           className="absolute left-4 top-4 rounded-full shadow-card"
         >
-          <Link to="/home">
+          <Link to="/nearby" aria-label="Back to stores">
             <ArrowLeft className="h-5 w-5" />
           </Link>
         </Button>
@@ -322,10 +322,10 @@ function StorePage() {
                     )}
 
                     {store && !soldOut && (
-                        <span className="absolute left-1 top-1 flex items-center gap-1 rounded-md bg-background/85 px-1.5 py-0.5 text-[9px] font-bold text-foreground backdrop-blur">
-                          <Clock className="h-3 w-3 text-primary" />
-                          {store.delivery_minutes} min
-                        </span>
+                      <span className="absolute left-1 top-1 flex items-center gap-1 rounded-md bg-background/85 px-1.5 py-0.5 text-[9px] font-bold text-foreground backdrop-blur">
+                        <Clock className="h-3 w-3 text-primary" />
+                        {store.delivery_minutes} min
+                      </span>
                     )}
                     {soldOut && (
                       <span className="absolute left-1.5 top-1.5 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[10px] font-bold text-background">
