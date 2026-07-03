@@ -276,8 +276,8 @@ function AdminShell() {
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-foreground/40" onClick={() => setOpen(false)} />
-          <aside className="absolute left-0 top-0 flex h-full w-72 flex-col gap-6 bg-background p-4 shadow-xl">
-            <div className="flex items-center justify-between">
+          <aside className="absolute left-0 top-0 flex h-dvh w-72 flex-col gap-4 overflow-hidden bg-background p-4 shadow-xl">
+            <div className="flex shrink-0 items-center justify-between">
               <Logo />
               <button
                 onClick={() => setOpen(false)}
@@ -287,10 +287,12 @@ function AdminShell() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            {navList}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 pb-2">
+              {navList}
+            </div>
             <button
               onClick={signOut}
-              className="mt-auto flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/10"
+              className="flex shrink-0 items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/10"
             >
               <LogOut className="h-4.5 w-4.5" />
               Sign out
@@ -301,15 +303,17 @@ function AdminShell() {
 
       <div className="mx-auto flex max-w-[1400px]">
         {/* Desktop sidebar */}
-        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-6 border-r border-border/60 bg-background p-4 lg:flex">
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-4 overflow-hidden border-r border-border/60 bg-background p-4 lg:flex">
           <div className="flex items-center justify-between">
             <Logo />
           </div>
           <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
             Marketplace Admin
           </div>
-          {navList}
-          <div className="mt-auto flex flex-col gap-1">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 pb-2">
+            {navList}
+          </div>
+          <div className="flex shrink-0 flex-col gap-1">
             <Link
               to="/home"
               className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground"

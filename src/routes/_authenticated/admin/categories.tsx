@@ -4,17 +4,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  adminListCategories,
-  adminSaveCategory,
-  adminDeleteCategory,
-} from "@/lib/admin.functions";
-import { userErrorMessage } from "@/lib/utils";
+import { adminListCategories, adminSaveCategory, adminDeleteCategory } from "@/lib/admin.functions";
+import { cn, userErrorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { ImageUpload } from "@/components/ImageUpload";
 import {
   Dialog,
   DialogContent,
@@ -128,7 +125,80 @@ function CategoriesPage() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-card">
-          <table className="w-full text-sm">
+          <div className="divide-y divide-border/40 sm:hidden">
+            {categories.map((c) => (
+              <div key={c.id} className="p-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  {c.image_url ? (
+                    <img
+                      src={c.image_url}
+                      alt=""
+                      className="h-10 w-10 shrink-0 rounded-xl object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-xl">
+                      {c.emoji}
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold">{c.label}</p>
+                    <p className="truncate text-xs text-muted-foreground">{c.key}</p>
+                  </div>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                      c.is_enabled
+                        ? "bg-success/15 text-success"
+                        : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {c.is_enabled ? "Enabled" : "Disabled"}
+                  </span>
+                  <div className="flex shrink-0 items-center">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`Edit ${c.label}`}
+                      onClick={() =>
+                        setForm({
+                          id: c.id,
+                          key: c.key,
+                          label: c.label,
+                          emoji: c.emoji ?? "",
+                          image_url: c.image_url ?? "",
+                          description: c.description ?? "",
+                          sort_order: c.sort_order,
+                          is_enabled: c.is_enabled,
+                        })
+                      }
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`Delete ${c.label}`}
+                      onClick={() => {
+                        if (confirm(`Delete "${c.label}"?`)) delMut.mutate(c.id);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+                {c.description && (
+                  <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{c.description}</p>
+                )}
+              </div>
+            ))}
+            {categories.length === 0 && (
+              <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                No categories yet.
+              </p>
+            )}
+          </div>
+
+          <table className="hidden w-full text-sm sm:table">
             <thead className="border-b border-border/60 bg-muted/40 text-left text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-4 py-3">Category</th>
@@ -143,7 +213,17 @@ function CategoriesPage() {
                 <tr key={c.id} className="border-b border-border/40 last:border-0">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 font-semibold">
-                      <span>{c.emoji}</span>
+                      {c.image_url ? (
+                        <img
+                          src={c.image_url}
+                          alt=""
+                          className="h-9 w-9 shrink-0 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-xl">
+                          {c.emoji}
+                        </span>
+                      )}
                       {c.label}
                     </div>
                     {c.description && (
@@ -152,9 +232,7 @@ function CategoriesPage() {
                       </p>
                     )}
                   </td>
-                  <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
-                    {c.key}
-                  </td>
+                  <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">{c.key}</td>
                   <td className="hidden px-4 py-3 sm:table-cell">{c.sort_order}</td>
                   <td className="px-4 py-3">
                     <span
@@ -232,9 +310,7 @@ function CategoriesPage() {
                   <Label>Slug</Label>
                   <Input
                     value={form.key}
-                    onChange={(e) =>
-                      setForm({ ...form, key: e.target.value.toLowerCase() })
-                    }
+                    onChange={(e) => setForm({ ...form, key: e.target.value.toLowerCase() })}
                     placeholder="grocery"
                   />
                 </div>
@@ -253,13 +329,11 @@ function CategoriesPage() {
                   <Input
                     type="number"
                     value={form.sort_order}
-                    onChange={(e) =>
-                      setForm({ ...form, sort_order: Number(e.target.value) })
-                    }
+                    onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) })}
                   />
                 </div>
               </div>
-              <div className="space-y-1.5">
+              <div className="hidden">
                 <Label>Image URL (optional)</Label>
                 <Input
                   value={form.image_url}
@@ -267,13 +341,17 @@ function CategoriesPage() {
                   placeholder="https://…"
                 />
               </div>
+              <ImageUpload
+                label="Category image (optional)"
+                bucket="category-images"
+                value={form.image_url}
+                onChange={(image_url) => setForm({ ...form, image_url })}
+              />
               <div className="space-y-1.5">
                 <Label>Description</Label>
                 <Textarea
                   value={form.description}
-                  onChange={(e) =>
-                    setForm({ ...form, description: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
                   rows={2}
                 />
               </div>

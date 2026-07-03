@@ -25,9 +25,12 @@ type UserDetailProfile = {
   phone: string | null;
   email: string | null;
   address: string | null;
+  avatar_url: string | null;
+  provider: string;
   is_verified: boolean;
   is_blocked: boolean;
   created_at: string;
+  last_login_at: string | null;
 };
 
 type UserDetailOrder = {
@@ -38,6 +41,8 @@ type UserDetailOrder = {
   total: number | string | null;
   status: string;
   payment_method: string | null;
+  address: string;
+  order_items: { name: string; quantity: number; unit_price: number | string }[];
 };
 
 type UserDetailData = {
@@ -111,8 +116,16 @@ function UserDetailPage() {
           <Info label="Email" value={user.email || "Not available"} />
           <Info label="Phone Verification" value={user.is_verified ? "Verified" : "Not verified"} />
           <Info label="Registration Date" value={new Date(user.created_at).toLocaleDateString()} />
+          <Info
+            label="Last Login"
+            value={
+              user.last_login_at ? new Date(user.last_login_at).toLocaleString() : "Not available"
+            }
+          />
           <Info label="Account Status" value={user.is_blocked ? "Blocked" : "Active"} />
           <Info label="Role" value={data.roles?.[0] || "customer"} />
+          <Info label="Login Provider" value={user.provider || "Not available"} />
+          <Info label="User ID" value={user.id} />
         </section>
 
         <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-card lg:col-span-2">
@@ -178,6 +191,7 @@ function UserDetailPage() {
                 <th className="px-5 py-3">Amount</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3">Payment Method</th>
+                <th className="px-5 py-3">Items & Address</th>
                 <th className="px-5 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -192,6 +206,18 @@ function UserDetailPage() {
                   <td className="px-5 py-3 font-semibold">{formatINR(Number(order.total))}</td>
                   <td className="px-5 py-3">{String(order.status).replaceAll("_", " ")}</td>
                   <td className="px-5 py-3">{order.payment_method ?? "Cash on delivery"}</td>
+                  <td className="max-w-xs px-5 py-3">
+                    <p className="font-medium">
+                      {order.order_items.length
+                        ? order.order_items
+                            .map((item) => `${item.quantity}× ${item.name}`)
+                            .join(", ")
+                        : "No item details"}
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                      {order.address || "No delivery address"}
+                    </p>
+                  </td>
                   <td className="px-5 py-3 text-right">
                     <Button asChild size="sm" variant="outline">
                       <Link to="/admin/orders" search={{ orderId: order.id }}>
@@ -204,7 +230,7 @@ function UserDetailPage() {
               ))}
               {data.orders.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-5 py-10 text-center text-muted-foreground">
                     No orders in this period.
                   </td>
                 </tr>

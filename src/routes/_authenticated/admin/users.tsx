@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -23,8 +23,13 @@ import {
 } from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/admin/users")({
-  component: UsersPage,
+  component: UsersLayout,
 });
+
+function UsersLayout() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  return pathname === "/admin/users" ? <UsersPage /> : <Outlet />;
+}
 
 type UserRow = {
   id: string;

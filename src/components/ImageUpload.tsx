@@ -5,7 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { userErrorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
-type Bucket = "store-logos" | "store-banners" | "product-images" | "marketplace-banners";
+type Bucket =
+  | "store-logos"
+  | "store-banners"
+  | "product-images"
+  | "marketplace-banners"
+  | "category-images";
 
 export function ImageUpload({
   label,

@@ -342,7 +342,9 @@ export const adminGetUserDetail = createServerFn({ method: "GET" })
     const [{ data: profile }, { data: roles }] = await Promise.all([
       supabaseAdmin
         .from("profiles")
-        .select("id, full_name, phone, email, address, is_verified, is_blocked, created_at")
+        .select(
+          "id, full_name, phone, email, address, avatar_url, provider, is_verified, is_blocked, created_at, last_login_at",
+        )
         .eq("id", data.userId)
         .maybeSingle(),
       supabaseAdmin.from("user_roles").select("role").eq("user_id", data.userId),
@@ -375,7 +377,13 @@ export const adminGetUserDetail = createServerFn({ method: "GET" })
         averageOrderValue: completed.length ? totalSpend / completed.length : 0,
         lastOrderDate: rows[0]?.created_at ?? null,
       },
-      addresses: profile.address ? [profile.address] : [],
+      addresses: Array.from(
+        new Set(
+          [profile.address, ...rows.map((order) => order.address)]
+            .map((address) => address?.trim())
+            .filter((address): address is string => Boolean(address)),
+        ),
+      ),
       orders: rows,
     };
   });
