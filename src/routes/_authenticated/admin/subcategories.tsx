@@ -48,7 +48,16 @@ type Subcategory = {
   is_enabled: boolean;
   categories: Category | null;
 };
-type Draft = Omit<Subcategory, "id" | "categories"> & { id?: string };
+type Draft = {
+  id?: string;
+  category_id: string;
+  key: string;
+  label: string;
+  image_url: string;
+  description: string;
+  sort_order: number;
+  is_enabled: boolean;
+};
 
 function SubcategoriesPage() {
   const qc = useQueryClient();

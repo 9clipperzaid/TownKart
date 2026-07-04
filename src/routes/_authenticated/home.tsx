@@ -93,9 +93,11 @@ function HomePage() {
   const bannerPointerRef = useRef<{ id: number; x: number; y: number } | null>(null);
   const bannerDraggedRef = useRef(false);
 
-  const { data: productSections = [], isLoading } = useQuery({
+  const { data: productSections = [], isLoading } = useQuery<ProductSection[]>({
     queryKey: ["home-product-sections"],
     queryFn: async () => {
+      // Product section tables are newer than the checked-in generated Supabase types.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const db = supabase as any;
       const { data, error } = await db
         .from("product_sections")
@@ -141,6 +143,7 @@ function HomePage() {
   const { data: subcategories = [] } = useQuery({
     queryKey: ["subcategories"],
     queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const db = supabase as any;
       const { data, error } = await db
         .from("subcategories")

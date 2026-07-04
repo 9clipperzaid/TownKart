@@ -34,7 +34,7 @@ export async function sendFcmToTokens({
 }) {
   const app = getFirebaseAdminApp();
   const uniqueTokens = [...new Set(tokens.filter(Boolean))];
-  if (!app || uniqueTokens.length === 0) return { successCount: 0, failureCount: 0 };
+  if (!app || uniqueTokens.length === 0) return { successCount: 0, failureCount: 0, responses: [] };
 
   return getMessaging(app).sendEachForMulticast({
     tokens: uniqueTokens,

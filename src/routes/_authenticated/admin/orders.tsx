@@ -49,6 +49,11 @@ const STATUSES = [
 
 type Status = (typeof STATUSES)[number]["key"];
 
+type OrderDetail = OrderRow & {
+  delivery_partner_id?: string | null;
+  status_history?: { status: string; created_at: string; notes?: string | null }[];
+};
+
 type OrderRow = {
   id: string;
   store_name: string;
@@ -97,7 +102,7 @@ function AdminOrdersPage() {
 
   const { data: selectedOrder } = useQuery({
     queryKey: ["admin-order-detail", selectedId],
-    queryFn: () => getDetail({ data: { orderId: selectedId! } }) as Promise<any>,
+    queryFn: () => getDetail({ data: { orderId: selectedId! } }) as Promise<OrderDetail>,
     enabled: !!selectedId,
   });
 
@@ -387,7 +392,7 @@ function AdminOrdersPage() {
           if (!open) {
             setSelectedId(null);
             setNotes("");
-            navigate({ to: "/admin/orders", search: {} });
+            navigate({ to: "/admin/orders", search: { orderId: undefined } });
           }
         }}
       >
@@ -467,7 +472,7 @@ function AdminOrdersPage() {
               <div className="rounded-xl border border-border/60 p-4">
                 <h3 className="font-bold">Ordered Products</h3>
                 <div className="mt-3 space-y-2">
-                  {selectedOrder.order_items?.map((item: any) => (
+                  {selectedOrder.order_items?.map((item) => (
                     <div key={item.name} className="flex justify-between gap-3 text-sm">
                       <span>
                         {item.quantity}x {item.name}
@@ -489,7 +494,7 @@ function AdminOrdersPage() {
                   {(selectedOrder.status_history?.length
                     ? selectedOrder.status_history
                     : [{ status: selectedOrder.status, created_at: selectedOrder.created_at }]
-                  ).map((h: any, index: number) => (
+                  ).map((h, index: number) => (
                     <div key={`${h.status}-${index}`} className="text-sm">
                       <span className="font-semibold">{String(h.status).replaceAll("_", " ")}</span>
                       <span className="ml-2 text-xs text-muted-foreground">

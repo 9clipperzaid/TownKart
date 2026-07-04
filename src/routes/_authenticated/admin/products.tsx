@@ -2,7 +2,17 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ChevronDown, Download, History, Pencil, Plus, RotateCcw, Search, Trash2, Upload } from "lucide-react";
+import {
+  ChevronDown,
+  Download,
+  History,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Search,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   adminBulkAssignProductCategory,
@@ -183,7 +193,7 @@ function ProductsPage() {
     queryFn: () =>
       listProducts({
         data: storeFilter === "all" ? {} : { storeId: storeFilter },
-      }) as Promise<ProductRow[]>,
+      }) as unknown as Promise<ProductRow[]>,
   });
 
   const { data: historyRows = [] } = useQuery({
@@ -321,7 +331,9 @@ function ProductsPage() {
     (a, b) => new Date(b.deleted_at!).getTime() - new Date(a.deleted_at!).getTime(),
   )[0];
   const latestDeletedCount = latestDeletion?.deletion_batch_id
-    ? deletedProducts.filter((product) => product.deletion_batch_id === latestDeletion.deletion_batch_id).length
+    ? deletedProducts.filter(
+        (product) => product.deletion_batch_id === latestDeletion.deletion_batch_id,
+      ).length
     : 0;
   const filtered = products.filter(
     (p) => !p.deleted_at && (!q || p.name.toLowerCase().includes(q.toLowerCase())),
@@ -568,10 +580,14 @@ function ProductsPage() {
                     setBulkSubcategory("");
                   }}
                 >
-                  <SelectTrigger><SelectValue placeholder="Choose category" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose category" />
+                  </SelectTrigger>
                   <SelectContent>
                     {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.key}>{category.label}</SelectItem>
+                      <SelectItem key={category.id} value={category.key}>
+                        {category.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -583,11 +599,15 @@ function ProductsPage() {
                   onValueChange={(value) => setBulkSubcategory(value === "none" ? "" : value)}
                   disabled={!bulkCategory}
                 >
-                  <SelectTrigger><SelectValue placeholder="Choose subcategory" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose subcategory" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
                     {bulkSubcategories.map((subcategory) => (
-                      <SelectItem key={subcategory.id} value={subcategory.id}>{subcategory.label}</SelectItem>
+                      <SelectItem key={subcategory.id} value={subcategory.id}>
+                        {subcategory.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -598,7 +618,9 @@ function ProductsPage() {
               >
                 Apply to {selectedIds.length} products
               </Button>
-              <Button variant="ghost" onClick={() => setSelectedIds([])}>Clear</Button>
+              <Button variant="ghost" onClick={() => setSelectedIds([])}>
+                Clear
+              </Button>
             </div>
           )}
         </div>
@@ -620,7 +642,11 @@ function ProductsPage() {
               variant="destructive"
               disabled={permanentDeleteMut.isPending}
               onClick={() => {
-                if (confirm(`Permanently delete all ${deletedProducts.length} products in trash? This cannot be undone.`)) {
+                if (
+                  confirm(
+                    `Permanently delete all ${deletedProducts.length} products in trash? This cannot be undone.`,
+                  )
+                ) {
                   permanentDeleteMut.mutate(deletedProducts.map((product) => product.id));
                 }
               }}
@@ -686,7 +712,9 @@ function ProductsPage() {
                     onCheckedChange={(checked) =>
                       setSelectedIds((current) =>
                         checked
-                          ? Array.from(new Set([...current, ...filtered.map((product) => product.id)]))
+                          ? Array.from(
+                              new Set([...current, ...filtered.map((product) => product.id)]),
+                            )
                           : current.filter((id) => !filtered.some((product) => product.id === id)),
                       )
                     }
@@ -710,9 +738,7 @@ function ProductsPage() {
                       checked={selectedIds.includes(p.id)}
                       onCheckedChange={(checked) =>
                         setSelectedIds((current) =>
-                          checked
-                            ? [...current, p.id]
-                            : current.filter((id) => id !== p.id),
+                          checked ? [...current, p.id] : current.filter((id) => id !== p.id),
                         )
                       }
                     />

@@ -25,7 +25,6 @@ function safeRedirect(value: string | undefined) {
 }
 
 export const Route = createFileRoute("/auth/login")({
-  ssr: false,
   validateSearch: (search) => loginSearchSchema.parse(search),
   beforeLoad: async ({ search }) => {
     const { data } = await supabase.auth.getSession();

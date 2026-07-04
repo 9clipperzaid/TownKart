@@ -18,9 +18,9 @@ const ORDER_STATUSES = [
 ] as const;
 const CUSTOMER_CANCELLABLE_STATUSES = ["pending", "accepted"] as const;
 
-async function getAdmin(): Promise<any> {
+async function getAdmin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin as any;
+  return supabaseAdmin;
 }
 
 async function canManageStore(userId: string, storeId: string | null) {
@@ -78,11 +78,14 @@ export const secureCheckout = createServerFn({ method: "POST" })
     if (error) throw new Error("Could not load cart.");
     if (!rows?.length) throw new Error("Your cart is empty.");
 
+    // Table is present in migrations but not yet emitted by the generated Supabase type file.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: paymentRow } = await (supabaseAdmin as any)
       .from("marketplace_settings")
       .select("value")
       .eq("key", "payment")
       .maybeSingle();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: orderSettingsRow } = await (supabaseAdmin as any)
       .from("marketplace_settings")
       .select("value")
@@ -285,7 +288,7 @@ export const cancelMyOrder = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!order) throw new Error("Order not found.");
-    if (!CUSTOMER_CANCELLABLE_STATUSES.includes(order.status as any)) {
+    if (!CUSTOMER_CANCELLABLE_STATUSES.includes(order.status as "pending" | "accepted")) {
       throw new Error(
         "This order can no longer be cancelled from the app. Please contact support.",
       );
@@ -323,6 +326,7 @@ export const cancelMyOrder = createServerFn({ method: "POST" })
         .eq("id", item.product_id);
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabaseAdmin as any).from("order_status_history").insert({
       order_id: data.orderId,
       status: "cancelled",
@@ -357,7 +361,10 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
       throw new Error("Forbidden.");
     }
 
-    const update: Record<string, unknown> = { status: data.status };
+    const update: { status: (typeof ORDER_STATUSES)[number]; delivery_partner_id?: string | null } =
+      {
+        status: data.status,
+      };
     if (data.deliveryPartnerId !== undefined) {
       update.delivery_partner_id = data.deliveryPartnerId;
     }
@@ -365,6 +372,7 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin.from("orders").update(update).eq("id", data.orderId);
     if (error) throw new Error(error.message);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabaseAdmin as any).from("order_status_history").insert({
       order_id: data.orderId,
       status: data.status,

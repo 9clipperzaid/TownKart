@@ -1,8 +1,8 @@
 import { sendFcmToTokens } from "@/lib/firebase-admin.server";
 
-async function getAdmin(): Promise<any> {
+async function getAdmin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin as any;
+  return supabaseAdmin;
 }
 
 export async function sendNewOrderPushNotification({
@@ -44,7 +44,9 @@ export async function sendNewOrderPushNotification({
     .select("token")
     .in("user_id", [...recipientIds]);
 
-  const tokens = (tokenRows ?? []).map((row) => row.token).filter(Boolean);
+  const tokens = (tokenRows ?? [])
+    .map((row: { token: string | null }) => row.token)
+    .filter((token: string | null): token is string => Boolean(token));
   if (tokens.length === 0) return;
 
   const result = await sendFcmToTokens({

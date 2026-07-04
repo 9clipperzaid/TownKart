@@ -772,7 +772,7 @@ export const adminBulkAssignProductCategory = createServerFn({ method: "POST" })
       .update({ category: data.category, subcategory_id: data.subcategory_id })
       .in("id", data.product_ids);
     if (error) throw new Error(error.message);
-    await logAction(context.userId, "bulk_category_update", "product", undefined, {
+    await logAction(context.userId, "bulk_category_update", "product", null, {
       product_count: data.product_ids.length,
       category: data.category,
       subcategory_id: data.subcategory_id,
@@ -818,9 +818,7 @@ export const adminBulkDeleteProducts = createServerFn({ method: "POST" })
 
 export const adminUndoProductDelete = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((value: unknown) =>
-    z.object({ batch_id: z.string().uuid() }).parse(value),
-  )
+  .inputValidator((value: unknown) => z.object({ batch_id: z.string().uuid() }).parse(value))
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const db = (await getAdmin()) as any;
@@ -880,7 +878,7 @@ export const adminRestoreProducts = createServerFn({ method: "POST" })
         .eq("id", product.id);
       if (error) throw new Error(error.message);
     }
-    await logAction(context.userId, "restore", "product", undefined, {
+    await logAction(context.userId, "restore", "product", null, {
       product_count: products?.length ?? 0,
     });
     return { restored: products?.length ?? 0 };
@@ -904,7 +902,7 @@ export const adminPermanentlyDeleteProducts = createServerFn({ method: "POST" })
     if (!ids.length) return { deleted: 0 };
     const { error } = await db.from("products").delete().in("id", ids);
     if (error) throw new Error(error.message);
-    await logAction(context.userId, "permanent_delete", "product", undefined, {
+    await logAction(context.userId, "permanent_delete", "product", null, {
       product_count: ids.length,
     });
     return { deleted: ids.length };

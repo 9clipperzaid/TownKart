@@ -70,7 +70,9 @@ let orderAudioContext: AudioContext | null = null;
 let orderAlertInterval: number | null = null;
 
 function getOrderAudioContext() {
-  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  const AudioContextCtor =
+    window.AudioContext ||
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AudioContextCtor) return null;
   orderAudioContext ??= new AudioContextCtor();
   return orderAudioContext;
