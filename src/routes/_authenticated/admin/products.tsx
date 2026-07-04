@@ -25,6 +25,7 @@ import {
   adminDeleteProduct,
   adminListCategories,
   adminListSubcategories,
+  adminListSubcategoryProductSections,
   adminPermanentlyDeleteProducts,
   adminPriceHistory,
   adminRestoreProducts,
@@ -65,6 +66,7 @@ type ProductRow = {
   description: string | null;
   category: string | null;
   subcategory_id: string | null;
+  subcategory_section_id: string | null;
   image_url: string | null;
   price: number;
   discount_price: number | null;
@@ -90,6 +92,7 @@ type FormState = {
   description: string;
   category: string;
   subcategory_id: string;
+  subcategory_section_id: string;
   image_url: string;
   price: number;
   discount_price: string;
@@ -130,6 +133,7 @@ function emptyForm(storeId: string): FormState {
     description: "",
     category: "",
     subcategory_id: "",
+    subcategory_section_id: "",
     image_url: "",
     price: 0,
     discount_price: "",
@@ -151,6 +155,7 @@ function ProductsPage() {
   const listProducts = useServerFn(adminListProducts);
   const listCats = useServerFn(adminListCategories);
   const listSubcategories = useServerFn(adminListSubcategories);
+  const listSubcategorySections = useServerFn(adminListSubcategoryProductSections);
   const save = useServerFn(adminSaveProduct);
   const bulkImport = useServerFn(adminBulkImportProducts);
   const bulkAssignCategory = useServerFn(adminBulkAssignProductCategory);
@@ -188,6 +193,19 @@ function ProductsPage() {
     queryFn: () =>
       listSubcategories() as Promise<{ id: string; category_id: string; label: string }[]>,
   });
+  const { data: subcategorySections = [] } = useQuery({
+    queryKey: ["admin-subcategory-product-sections"],
+    queryFn: () =>
+      listSubcategorySections() as Promise<
+        {
+          id: string;
+          subcategory_id: string;
+          name: string;
+          sort_order: number;
+          is_enabled: boolean;
+        }[]
+      >,
+  });
   const { data: products = [], isLoading } = useQuery({
     queryKey: ["admin-products", storeFilter],
     queryFn: () =>
@@ -221,6 +239,7 @@ function ProductsPage() {
           description: f.description || null,
           category: f.category || null,
           subcategory_id: f.subcategory_id || null,
+          subcategory_section_id: f.subcategory_section_id || null,
           image_url: f.image_url || null,
           price: Number(f.price) || 0,
           discount_price: f.discount_price ? Number(f.discount_price) : null,
@@ -796,6 +815,7 @@ function ProductsPage() {
                             description: p.description ?? "",
                             category: p.category ?? "",
                             subcategory_id: p.subcategory_id ?? "",
+                            subcategory_section_id: p.subcategory_section_id ?? "",
                             image_url: p.image_url ?? "",
                             price: Number(p.price),
                             discount_price:
@@ -870,7 +890,14 @@ function ProductsPage() {
                   <Label>Category</Label>
                   <Select
                     value={form.category || "none"}
-                    onValueChange={(v) => setForm({ ...form, category: v === "none" ? "" : v })}
+                    onValueChange={(v) =>
+                      setForm({
+                        ...form,
+                        category: v === "none" ? "" : v,
+                        subcategory_id: "",
+                        subcategory_section_id: "",
+                      })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Optional" />
@@ -937,7 +964,7 @@ function ProductsPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setForm({ ...form, subcategory_id: "" });
+                          setForm({ ...form, subcategory_id: "", subcategory_section_id: "" });
                           setSubcategoryOpen(false);
                         }}
                         className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-accent"
@@ -953,7 +980,11 @@ function ProductsPage() {
                             type="button"
                             key={subcategory.id}
                             onClick={() => {
-                              setForm({ ...form, subcategory_id: subcategory.id });
+                              setForm({
+                                ...form,
+                                subcategory_id: subcategory.id,
+                                subcategory_section_id: "",
+                              });
                               setSubcategoryOpen(false);
                             }}
                             className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-accent"
@@ -975,6 +1006,39 @@ function ProductsPage() {
                   Choose the home tile where this product should appear.
                 </p>
               </div>
+
+              {form.subcategory_id && (
+                <div className="space-y-1.5">
+                  <Label>Section inside subcategory</Label>
+                  <Select
+                    value={form.subcategory_section_id || "none"}
+                    onValueChange={(value) =>
+                      setForm({
+                        ...form,
+                        subcategory_section_id: value === "none" ? "" : value,
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose section" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No section</SelectItem>
+                      {subcategorySections
+                        .filter((section) => section.subcategory_id === form.subcategory_id)
+                        .map((section) => (
+                          <SelectItem key={section.id} value={section.id}>
+                            {section.name}
+                            {section.is_enabled ? "" : " (hidden)"}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    This decides under which heading the product appears on the customer page.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-3 rounded-xl border border-border/60 p-3">
                 <div className="flex items-center justify-between gap-3">

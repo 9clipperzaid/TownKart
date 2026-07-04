@@ -70,8 +70,9 @@ function CartPage() {
     queryKey: ["cart-detail"],
     queryFn: async () => {
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) {
         return Object.values(getLocalCart()).map((item) => ({
           id: `${item.productId}::${item.selectedUnit}`,
@@ -149,10 +150,12 @@ function CartPage() {
   }, [addressLoaded, deliveryLocation, isLoading, items.length, locationPromptShown]);
 
   const setQty = useMutation({
+    scope: { id: "cart-quantity-updates" },
     mutationFn: async ({ id, quantity }: { id: string; quantity: number }) => {
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) {
         const cart = getLocalCart();
         const item = cart[id];
@@ -163,13 +166,30 @@ function CartPage() {
         return;
       }
       if (quantity <= 0) {
-        await supabase.from("cart_items").delete().eq("id", id);
+        const { error } = await supabase.from("cart_items").delete().eq("id", id);
+        if (error) throw error;
       } else {
-        await supabase.from("cart_items").update({ quantity }).eq("id", id);
+        const { error } = await supabase.from("cart_items").update({ quantity }).eq("id", id);
+        if (error) throw error;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cart-detail"] });
+    onMutate: async ({ id, quantity }) => {
+      await queryClient.cancelQueries({ queryKey: ["cart-detail"] });
+      const previous = queryClient.getQueryData<CartRow[]>(["cart-detail"]);
+      queryClient.setQueryData<CartRow[]>(["cart-detail"], (current = []) =>
+        quantity <= 0
+          ? current.filter((item) => item.id !== id)
+          : current.map((item) => (item.id === id ? { ...item, quantity } : item)),
+      );
+      return { previous };
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["cart-detail"], context.previous);
+      }
+      toast.error(userErrorMessage(error, "Could not update cart"));
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["cart-count"] });
       queryClient.invalidateQueries({ queryKey: ["cart-map"] });
     },
@@ -318,6 +338,12 @@ function CartPage() {
             </div>
             <div className="flex shrink-0 items-center gap-2 rounded-full bg-secondary px-1.5 py-1">
               <button
+                type="button"
+                aria-label={
+                  r.quantity === 1
+                    ? `Remove ${r.products?.name ?? "item"} from cart`
+                    : `Decrease ${r.products?.name ?? "item"} quantity`
+                }
                 className="flex h-7 w-7 items-center justify-center text-primary"
                 onClick={() => setQty.mutate({ id: r.id, quantity: r.quantity - 1 })}
               >
@@ -325,6 +351,8 @@ function CartPage() {
               </button>
               <span className="min-w-5 text-center text-sm font-bold">{r.quantity}</span>
               <button
+                type="button"
+                aria-label={`Increase ${r.products?.name ?? "item"} quantity`}
                 className="flex h-7 w-7 items-center justify-center text-primary"
                 onClick={() => setQty.mutate({ id: r.id, quantity: r.quantity + 1 })}
               >

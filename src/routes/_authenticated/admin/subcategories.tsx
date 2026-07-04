@@ -2,13 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { ListTree, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   adminDeleteSubcategory,
   adminListCategories,
   adminListSubcategories,
   adminSaveSubcategory,
+  adminDeleteSubcategoryProductSection,
+  adminListSubcategoryProductSections,
+  adminSaveSubcategoryProductSection,
 } from "@/lib/admin.functions";
 import { userErrorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -58,6 +61,14 @@ type Draft = {
   sort_order: number;
   is_enabled: boolean;
 };
+type ProductSection = {
+  id: string;
+  subcategory_id: string;
+  name: string;
+  sort_order: number;
+  is_enabled: boolean;
+};
+type SectionDraft = Omit<ProductSection, "id"> & { id?: string };
 
 function SubcategoriesPage() {
   const qc = useQueryClient();
@@ -65,7 +76,12 @@ function SubcategoriesPage() {
   const listCategories = useServerFn(adminListCategories);
   const save = useServerFn(adminSaveSubcategory);
   const remove = useServerFn(adminDeleteSubcategory);
+  const listSections = useServerFn(adminListSubcategoryProductSections);
+  const saveSection = useServerFn(adminSaveSubcategoryProductSection);
+  const removeSection = useServerFn(adminDeleteSubcategoryProductSection);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [sectionOwner, setSectionOwner] = useState<Subcategory | null>(null);
+  const [sectionDraft, setSectionDraft] = useState<SectionDraft | null>(null);
   const { data: categories = [] } = useQuery({
     queryKey: ["admin-categories"],
     queryFn: () => listCategories() as Promise<Category[]>,
@@ -73,6 +89,10 @@ function SubcategoriesPage() {
   const { data: subcategories = [], isLoading } = useQuery({
     queryKey: ["admin-subcategories"],
     queryFn: () => list() as Promise<Subcategory[]>,
+  });
+  const { data: productSections = [] } = useQuery({
+    queryKey: ["admin-subcategory-product-sections"],
+    queryFn: () => listSections() as Promise<ProductSection[]>,
   });
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["admin-subcategories"] });
@@ -92,6 +112,24 @@ function SubcategoriesPage() {
     onSuccess: () => {
       refresh();
       toast.success("Subcategory deleted");
+    },
+  });
+  const refreshSections = () =>
+    qc.invalidateQueries({ queryKey: ["admin-subcategory-product-sections"] });
+  const saveSectionMut = useMutation({
+    mutationFn: (value: SectionDraft) => saveSection({ data: value }),
+    onSuccess: () => {
+      refreshSections();
+      setSectionDraft(null);
+      toast.success("Section saved");
+    },
+    onError: (error) => toast.error(userErrorMessage(error, "Could not save section")),
+  });
+  const deleteSectionMut = useMutation({
+    mutationFn: (id: string) => removeSection({ data: { id } }),
+    onSuccess: () => {
+      refreshSections();
+      toast.success("Section deleted");
     },
   });
 
@@ -147,6 +185,14 @@ function SubcategoriesPage() {
               <p className="mt-1 text-xs">{subcategory.is_enabled ? "Visible" : "Hidden"}</p>
             </div>
             <div className="flex shrink-0 flex-col">
+              <Button
+                size="icon"
+                variant="ghost"
+                title="Manage product sections"
+                onClick={() => setSectionOwner(subcategory)}
+              >
+                <ListTree className="h-4 w-4" />
+              </Button>
               <Button
                 size="icon"
                 variant="ghost"
@@ -277,6 +323,112 @@ function SubcategoriesPage() {
             >
               {saveMut.isPending ? "Saving..." : "Save"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!sectionOwner} onOpenChange={(open) => !open && setSectionOwner(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{sectionOwner?.label}: product sections</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Add headings such as Vegetables and Fruits. Their order controls the customer page.
+          </p>
+          <div className="space-y-2">
+            {productSections
+              .filter((section) => section.subcategory_id === sectionOwner?.id)
+              .map((section) => (
+                <div key={section.id} className="flex items-center gap-3 rounded-xl border p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold">{section.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Order {section.sort_order} · {section.is_enabled ? "Visible" : "Hidden"}
+                    </p>
+                  </div>
+                  <Button size="icon" variant="ghost" onClick={() => setSectionDraft(section)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() =>
+                      confirm(`Delete ${section.name}? Products will remain in the subcategory.`) &&
+                      deleteSectionMut.mutate(section.id)
+                    }
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+          </div>
+          {sectionDraft ? (
+            <div className="space-y-3 rounded-xl border bg-muted/20 p-3">
+              <div className="space-y-1.5">
+                <Label>Section name</Label>
+                <Input
+                  value={sectionDraft.name}
+                  onChange={(event) =>
+                    setSectionDraft({ ...sectionDraft, name: event.target.value })
+                  }
+                  placeholder="Vegetables"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Sort order</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={sectionDraft.sort_order}
+                    onChange={(event) =>
+                      setSectionDraft({ ...sectionDraft, sort_order: Number(event.target.value) })
+                    }
+                  />
+                </div>
+                <label className="flex items-center justify-between rounded-xl border px-3">
+                  <span>Visible</span>
+                  <Switch
+                    checked={sectionDraft.is_enabled}
+                    onCheckedChange={(is_enabled) =>
+                      setSectionDraft({ ...sectionDraft, is_enabled })
+                    }
+                  />
+                </label>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setSectionDraft(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  disabled={!sectionDraft.name.trim() || saveSectionMut.isPending}
+                  onClick={() => saveSectionMut.mutate(sectionDraft)}
+                >
+                  Save section
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!sectionOwner) return;
+                const count = productSections.filter(
+                  (s) => s.subcategory_id === sectionOwner.id,
+                ).length;
+                setSectionDraft({
+                  subcategory_id: sectionOwner.id,
+                  name: "",
+                  sort_order: count,
+                  is_enabled: true,
+                });
+              }}
+            >
+              <Plus className="h-4 w-4" /> Add section
+            </Button>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setSectionOwner(null)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

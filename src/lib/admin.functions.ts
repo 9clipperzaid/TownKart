@@ -533,6 +533,63 @@ export const adminDeleteSubcategory = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const adminListSubcategoryProductSections = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { data, error } = await db
+      .from("subcategory_product_sections")
+      .select("*")
+      .order("sort_order", { ascending: true });
+    if (error?.code === "42P01") return [];
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
+
+const subcategoryProductSectionSchema = z.object({
+  id: z.string().uuid().optional(),
+  subcategory_id: z.string().uuid(),
+  name: z.string().trim().min(1).max(80),
+  sort_order: z.number().int().min(0).max(9999),
+  is_enabled: z.boolean(),
+});
+
+export const adminSaveSubcategoryProductSection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) => subcategoryProductSectionSchema.parse(value))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const payload = { ...data, updated_at: new Date().toISOString() };
+    delete payload.id;
+    const query = data.id
+      ? db.from("subcategory_product_sections").update(payload).eq("id", data.id)
+      : db.from("subcategory_product_sections").insert(payload);
+    const { data: row, error } = await query.select("id").single();
+    if (error) throw new Error(error.message);
+    await logAction(
+      context.userId,
+      data.id ? "update" : "create",
+      "subcategory_product_section",
+      row.id,
+      payload,
+    );
+    return { id: row.id as string };
+  });
+
+export const adminDeleteSubcategoryProductSection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: { id: string }) => z.object({ id: z.string().uuid() }).parse(value))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { error } = await db.from("subcategory_product_sections").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await logAction(context.userId, "delete", "subcategory_product_section", data.id);
+    return { ok: true };
+  });
+
 // ---------------------------------------------------------------------------
 // Stores
 // ---------------------------------------------------------------------------
@@ -662,6 +719,7 @@ const productSchema = z.object({
   description: z.string().trim().max(500).optional().nullable(),
   category: z.string().trim().max(40).optional().nullable(),
   subcategory_id: z.string().uuid().optional().nullable(),
+  subcategory_section_id: z.string().uuid().optional().nullable(),
   image_url: z.string().trim().max(500).optional().nullable(),
   price: z.number().min(0).max(1000000),
   discount_price: z.number().min(0).max(1000000).optional().nullable(),
@@ -690,6 +748,19 @@ export const adminSaveProduct = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const supabaseAdmin = (await getAdmin()) as any;
+    if (data.subcategory_section_id) {
+      if (!data.subcategory_id)
+        throw new Error("Choose a subcategory before choosing its section.");
+      const { data: section, error: sectionError } = await supabaseAdmin
+        .from("subcategory_product_sections")
+        .select("subcategory_id")
+        .eq("id", data.subcategory_section_id)
+        .single();
+      if (sectionError) throw new Error(sectionError.message);
+      if (section.subcategory_id !== data.subcategory_id) {
+        throw new Error("The selected section does not belong to this subcategory.");
+      }
+    }
     const { id, ...rest } = data;
     const payload = {
       ...rest,
@@ -769,7 +840,11 @@ export const adminBulkAssignProductCategory = createServerFn({ method: "POST" })
 
     const { error } = await db
       .from("products")
-      .update({ category: data.category, subcategory_id: data.subcategory_id })
+      .update({
+        category: data.category,
+        subcategory_id: data.subcategory_id,
+        subcategory_section_id: null,
+      })
       .in("id", data.product_ids);
     if (error) throw new Error(error.message);
     await logAction(context.userId, "bulk_category_update", "product", null, {

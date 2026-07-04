@@ -25,8 +25,9 @@ export function ProductQuickAdd({ product }: { product: QuickAddProduct }) {
       const selectedUnit = option?.label ?? product.unit;
       const unitPrice = Number(option?.unitPrice ?? product.price);
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user;
 
       if (!user) {
         const current = getLocalCart()[`${product.id}::${selectedUnit}`]?.quantity ?? 0;

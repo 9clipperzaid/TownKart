@@ -411,6 +411,7 @@ export type Database = {
           stock_quantity: number;
           store_id: string;
           subcategory_id: string | null;
+          subcategory_section_id: string | null;
           tags: string[];
           unit: string;
           unit_options: Json;
@@ -441,6 +442,7 @@ export type Database = {
           stock_quantity?: number;
           store_id: string;
           subcategory_id?: string | null;
+          subcategory_section_id?: string | null;
           tags?: string[];
           unit?: string;
           unit_options?: Json;
@@ -471,6 +473,7 @@ export type Database = {
           stock_quantity?: number;
           store_id?: string;
           subcategory_id?: string | null;
+          subcategory_section_id?: string | null;
           tags?: string[];
           unit?: string;
           unit_options?: Json;
