@@ -2,14 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ChevronDown, Download, History, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { ChevronDown, Download, History, Pencil, Plus, RotateCcw, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   adminBulkAssignProductCategory,
+  adminBulkDeleteProducts,
   adminBulkImportProducts,
   adminListStores,
   adminListProducts,
   adminSaveProduct,
+  adminUndoProductDelete,
   adminDeleteProduct,
   adminListCategories,
   adminListSubcategories,
@@ -64,6 +66,8 @@ type ProductRow = {
   has_unit_options: boolean;
   unit_options: { label: string; unitPrice: number }[];
   price_updated_at: string;
+  deleted_at: string | null;
+  deletion_batch_id: string | null;
   stores: { name: string } | null;
 };
 
@@ -138,6 +142,8 @@ function ProductsPage() {
   const save = useServerFn(adminSaveProduct);
   const bulkImport = useServerFn(adminBulkImportProducts);
   const bulkAssignCategory = useServerFn(adminBulkAssignProductCategory);
+  const bulkDelete = useServerFn(adminBulkDeleteProducts);
+  const undoDelete = useServerFn(adminUndoProductDelete);
   const remove = useServerFn(adminDeleteProduct);
   const history = useServerFn(adminPriceHistory);
 
@@ -267,7 +273,35 @@ function ProductsPage() {
     onError: (e: Error) => toast.error(userErrorMessage(e, "Could not update products")),
   });
 
-  const filtered = products.filter((p) => !q || p.name.toLowerCase().includes(q.toLowerCase()));
+  const bulkDeleteMut = useMutation({
+    mutationFn: () => bulkDelete({ data: { product_ids: selectedIds } }),
+    onSuccess: (result) => {
+      toast.success(`${result.deleted} products moved to trash`);
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
+      setSelectedIds([]);
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "Could not delete products")),
+  });
+
+  const undoDeleteMut = useMutation({
+    mutationFn: (batchId: string) => undoDelete({ data: { batch_id: batchId } }),
+    onSuccess: (result) => {
+      toast.success(`${result.restored} products restored`);
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "Could not restore products")),
+  });
+
+  const deletedProducts = products.filter((product) => product.deleted_at);
+  const latestDeletion = [...deletedProducts].sort(
+    (a, b) => new Date(b.deleted_at!).getTime() - new Date(a.deleted_at!).getTime(),
+  )[0];
+  const latestDeletedCount = latestDeletion?.deletion_batch_id
+    ? deletedProducts.filter((product) => product.deletion_batch_id === latestDeletion.deletion_batch_id).length
+    : 0;
+  const filtered = products.filter(
+    (p) => !p.deleted_at && (!q || p.name.toLowerCase().includes(q.toLowerCase())),
+  );
   const allFilteredSelected =
     filtered.length > 0 && filtered.every((product) => selectedIds.includes(product.id));
   const bulkSubcategories = subcategories.filter((subcategory) => {
@@ -498,7 +532,36 @@ function ProductsPage() {
           >
             Apply to {selectedIds.length} products
           </Button>
+          <Button
+            variant="destructive"
+            disabled={bulkDeleteMut.isPending}
+            onClick={() => {
+              if (confirm(`Move ${selectedIds.length} selected products to trash?`)) {
+                bulkDeleteMut.mutate();
+              }
+            }}
+          >
+            <Trash2 className="h-4 w-4" /> Delete selected
+          </Button>
           <Button variant="ghost" onClick={() => setSelectedIds([])}>Clear</Button>
+        </div>
+      )}
+
+      {latestDeletion?.deletion_batch_id && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-500/35 bg-amber-500/10 p-4">
+          <div>
+            <p className="font-bold">Last deleted: {latestDeletedCount} products</p>
+            <p className="text-xs text-muted-foreground">
+              Saved in trash until you restore them.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            disabled={undoDeleteMut.isPending}
+            onClick={() => undoDeleteMut.mutate(latestDeletion.deletion_batch_id!)}
+          >
+            <RotateCcw className="h-4 w-4" /> Undo last delete
+          </Button>
         </div>
       )}
 

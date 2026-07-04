@@ -780,6 +780,77 @@ export const adminBulkAssignProductCategory = createServerFn({ method: "POST" })
     return { updated: data.product_ids.length };
   });
 
+export const adminBulkDeleteProducts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) =>
+    z.object({ product_ids: z.array(z.string().uuid()).min(1).max(500) }).parse(value),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const batchId = crypto.randomUUID();
+    const { data: products, error: readError } = await db
+      .from("products")
+      .select("id, status, is_available")
+      .in("id", data.product_ids)
+      .is("deleted_at", null);
+    if (readError) throw new Error(readError.message);
+
+    for (const product of products ?? []) {
+      const { error } = await db
+        .from("products")
+        .update({
+          deleted_at: new Date().toISOString(),
+          deletion_batch_id: batchId,
+          deleted_previous_status: product.status,
+          deleted_previous_available: product.is_available,
+          status: "inactive",
+          is_available: false,
+        })
+        .eq("id", product.id);
+      if (error) throw new Error(error.message);
+    }
+    await logAction(context.userId, "bulk_delete", "product", batchId, {
+      product_count: products?.length ?? 0,
+    });
+    return { deleted: products?.length ?? 0, batch_id: batchId };
+  });
+
+export const adminUndoProductDelete = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) =>
+    z.object({ batch_id: z.string().uuid() }).parse(value),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { data: products, error: readError } = await db
+      .from("products")
+      .select("id, deleted_previous_status, deleted_previous_available")
+      .eq("deletion_batch_id", data.batch_id)
+      .not("deleted_at", "is", null);
+    if (readError) throw new Error(readError.message);
+
+    for (const product of products ?? []) {
+      const { error } = await db
+        .from("products")
+        .update({
+          deleted_at: null,
+          deletion_batch_id: null,
+          status: product.deleted_previous_status ?? "active",
+          is_available: product.deleted_previous_available ?? true,
+          deleted_previous_status: null,
+          deleted_previous_available: null,
+        })
+        .eq("id", product.id);
+      if (error) throw new Error(error.message);
+    }
+    await logAction(context.userId, "undo_bulk_delete", "product", data.batch_id, {
+      product_count: products?.length ?? 0,
+    });
+    return { restored: products?.length ?? 0 };
+  });
+
 const bulkProductSchema = z.object({
   products: z
     .array(productSchema.omit({ id: true }))
