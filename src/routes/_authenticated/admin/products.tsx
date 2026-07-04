@@ -15,7 +15,9 @@ import {
   adminDeleteProduct,
   adminListCategories,
   adminListSubcategories,
+  adminPermanentlyDeleteProducts,
   adminPriceHistory,
+  adminRestoreProducts,
 } from "@/lib/admin.functions";
 import { formatINR } from "@/lib/format";
 import { userErrorMessage } from "@/lib/utils";
@@ -144,6 +146,8 @@ function ProductsPage() {
   const bulkAssignCategory = useServerFn(adminBulkAssignProductCategory);
   const bulkDelete = useServerFn(adminBulkDeleteProducts);
   const undoDelete = useServerFn(adminUndoProductDelete);
+  const restoreProducts = useServerFn(adminRestoreProducts);
+  const permanentlyDeleteProducts = useServerFn(adminPermanentlyDeleteProducts);
   const remove = useServerFn(adminDeleteProduct);
   const history = useServerFn(adminPriceHistory);
 
@@ -159,6 +163,7 @@ function ProductsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkCategory, setBulkCategory] = useState("");
   const [bulkSubcategory, setBulkSubcategory] = useState("");
+  const [trashOpen, setTrashOpen] = useState(false);
 
   const { data: stores = [] } = useQuery({
     queryKey: ["admin-stores"],
@@ -290,6 +295,25 @@ function ProductsPage() {
       qc.invalidateQueries({ queryKey: ["admin-products"] });
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, "Could not restore products")),
+  });
+
+  const restoreMut = useMutation({
+    mutationFn: (productIds: string[]) => restoreProducts({ data: { product_ids: productIds } }),
+    onSuccess: (result) => {
+      toast.success(`${result.restored} products restored`);
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "Could not restore products")),
+  });
+
+  const permanentDeleteMut = useMutation({
+    mutationFn: (productIds: string[]) =>
+      permanentlyDeleteProducts({ data: { product_ids: productIds } }),
+    onSuccess: (result) => {
+      toast.success(`${result.deleted} products permanently deleted`);
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "Could not empty trash")),
   });
 
   const deletedProducts = products.filter((product) => product.deleted_at);
@@ -578,6 +602,70 @@ function ProductsPage() {
             </div>
           )}
         </div>
+      )}
+
+      {deletedProducts.length > 0 && (
+        <section className="overflow-hidden rounded-2xl border border-destructive/25 bg-card shadow-card">
+          <div className="flex items-center justify-between gap-3 p-4">
+            <button
+              type="button"
+              className="flex min-w-0 items-center gap-2 text-left"
+              onClick={() => setTrashOpen((open) => !open)}
+            >
+              <ChevronDown className={`h-4 w-4 transition ${trashOpen ? "rotate-180" : ""}`} />
+              <span className="font-bold">Trash ({deletedProducts.length})</span>
+            </button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={permanentDeleteMut.isPending}
+              onClick={() => {
+                if (confirm(`Permanently delete all ${deletedProducts.length} products in trash? This cannot be undone.`)) {
+                  permanentDeleteMut.mutate(deletedProducts.map((product) => product.id));
+                }
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Empty Trash
+            </Button>
+          </div>
+          {trashOpen && (
+            <div className="divide-y border-t border-border/60">
+              {deletedProducts.map((product) => (
+                <div key={product.id} className="flex items-center gap-3 p-3 sm:p-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{product.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {product.stores?.name ?? "Unknown store"}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={restoreMut.isPending}
+                    onClick={() => restoreMut.mutate([product.id])}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" /> Restore
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    title="Delete permanently"
+                    aria-label={`Permanently delete ${product.name}`}
+                    disabled={permanentDeleteMut.isPending}
+                    onClick={() => {
+                      if (confirm(`Permanently delete “${product.name}”? This cannot be undone.`)) {
+                        permanentDeleteMut.mutate([product.id]);
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       {isLoading ? (

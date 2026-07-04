@@ -851,6 +851,65 @@ export const adminUndoProductDelete = createServerFn({ method: "POST" })
     return { restored: products?.length ?? 0 };
   });
 
+export const adminRestoreProducts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) =>
+    z.object({ product_ids: z.array(z.string().uuid()).min(1).max(500) }).parse(value),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { data: products, error: readError } = await db
+      .from("products")
+      .select("id, deleted_previous_status, deleted_previous_available")
+      .in("id", data.product_ids)
+      .not("deleted_at", "is", null);
+    if (readError) throw new Error(readError.message);
+
+    for (const product of products ?? []) {
+      const { error } = await db
+        .from("products")
+        .update({
+          deleted_at: null,
+          deletion_batch_id: null,
+          status: product.deleted_previous_status ?? "active",
+          is_available: product.deleted_previous_available ?? true,
+          deleted_previous_status: null,
+          deleted_previous_available: null,
+        })
+        .eq("id", product.id);
+      if (error) throw new Error(error.message);
+    }
+    await logAction(context.userId, "restore", "product", undefined, {
+      product_count: products?.length ?? 0,
+    });
+    return { restored: products?.length ?? 0 };
+  });
+
+export const adminPermanentlyDeleteProducts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) =>
+    z.object({ product_ids: z.array(z.string().uuid()).min(1).max(5000) }).parse(value),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { data: trashed, error: readError } = await db
+      .from("products")
+      .select("id")
+      .in("id", data.product_ids)
+      .not("deleted_at", "is", null);
+    if (readError) throw new Error(readError.message);
+    const ids = (trashed ?? []).map((product: { id: string }) => product.id);
+    if (!ids.length) return { deleted: 0 };
+    const { error } = await db.from("products").delete().in("id", ids);
+    if (error) throw new Error(error.message);
+    await logAction(context.userId, "permanent_delete", "product", undefined, {
+      product_count: ids.length,
+    });
+    return { deleted: ids.length };
+  });
+
 const bulkProductSchema = z.object({
   products: z
     .array(productSchema.omit({ id: true }))
