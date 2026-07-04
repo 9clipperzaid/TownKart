@@ -14,6 +14,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { FloatingContact } from "@/components/FloatingContact";
+import { AppSplash } from "@/components/AppSplash";
 import { supabase } from "@/integrations/supabase/client";
 
 const SITE_URL = "https://www.townkart.store";
@@ -197,6 +198,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AppSplash />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       {pathname !== "/home" && <FloatingContact />}

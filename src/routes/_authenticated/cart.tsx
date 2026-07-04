@@ -16,6 +16,7 @@ import {
   setLocalCart,
 } from "@/lib/local-cart";
 import { CallToOrder } from "@/components/CallToOrder";
+import { OrderProcessingScreen } from "@/components/OrderProcessingScreen";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -65,7 +66,6 @@ function CartPage() {
   const [locating, setLocating] = useState(false);
   const [locationPromptOpen, setLocationPromptOpen] = useState(false);
   const [locationPromptShown, setLocationPromptShown] = useState(false);
-
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["cart-detail"],
     queryFn: async () => {
@@ -299,6 +299,8 @@ function CartPage() {
     onError: (e) =>
       toast.error(userErrorMessage(e, "Could not place your order. Please try again.")),
   });
+
+  if (checkout.isPending) return <OrderProcessingScreen />;
 
   if (!isLoading && items.length === 0) {
     return (
