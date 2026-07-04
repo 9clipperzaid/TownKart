@@ -188,6 +188,29 @@ function HomePage() {
     queryFn: () => loadCategorySections() as Promise<CategorySection[]>,
   });
 
+  const query = q.trim().toLowerCase();
+  const { data: catalogSearchProducts = [], isLoading: isSearchLoading } = useQuery({
+    queryKey: ["home-catalog-search", query],
+    enabled: query.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("*, stores(name)")
+        .eq("is_available", true)
+        .eq("status", "active")
+        .is("deleted_at", null)
+        .limit(300);
+      if (error) throw error;
+      return (data as ProductSearchRow[]).filter(
+        (product) =>
+          product.name.toLowerCase().includes(query) ||
+          (product.description ?? "").toLowerCase().includes(query) ||
+          (product.category ?? "").toLowerCase().includes(query) ||
+          (product.stores?.name ?? "").toLowerCase().includes(query),
+      );
+    },
+  });
+
   const heroBanners = useMemo<HomeBanner[]>(
     () =>
       adminBanners
@@ -257,24 +280,27 @@ function HomePage() {
     return () => window.clearInterval(timer);
   }, [heroBanners.length]);
 
-  const query = q.trim().toLowerCase();
   const cartTotal = Object.values(cart).reduce((total, quantity) => total + quantity, 0);
-  const visibleSections = productSections
-    .map((section) => ({
-      ...section,
-      products: section.product_section_items
-        .map((item) => item.products)
-        .filter((product): product is ProductSearchRow => Boolean(product?.is_available))
-        .filter((product) => !active || product.category === active)
-        .filter(
-          (product) =>
-            !query ||
-            product.name.toLowerCase().includes(query) ||
-            (product.description ?? "").toLowerCase().includes(query) ||
-            (product.stores?.name ?? "").toLowerCase().includes(query),
-        ),
-    }))
-    .filter((section) => section.products.length > 0 || (!query && !active));
+  const visibleSections = query
+    ? [
+        {
+          id: "catalog-search-results",
+          title: `Search results for “${q.trim()}”`,
+          display_order: 0,
+          layout_mode: "horizontal" as const,
+          product_section_items: [],
+          products: catalogSearchProducts,
+        },
+      ]
+    : productSections
+        .map((section) => ({
+          ...section,
+          products: section.product_section_items
+            .map((item) => item.products)
+            .filter((product): product is ProductSearchRow => Boolean(product?.is_available))
+            .filter((product) => !active || product.category === active),
+        }))
+        .filter((section) => section.products.length > 0 || !active);
 
   const setQty = useMutation({
     mutationFn: async ({
@@ -487,54 +513,55 @@ function HomePage() {
         </div>
       </section>
 
-      {categorySections.map((section) => {
-        const tiles = [...section.subcategory_section_items]
-          .sort((a, b) => a.display_order - b.display_order)
-          .map((item) =>
-            subcategories.find((subcategory) => subcategory.id === item.subcategory_id),
-          )
-          .filter((subcategory): subcategory is Subcategory => Boolean(subcategory))
-          .slice(0, section.rows * 4);
-        if (!tiles.length) return null;
-        return (
-          <section
-            key={section.id}
-            className="px-4 pb-4 pt-6"
-            style={{ order: section.display_order }}
-          >
-            <h2 className="mb-3 text-lg font-bold">{section.title}</h2>
-            <div className="grid grid-cols-4 gap-x-2.5 gap-y-5 sm:grid-cols-6 lg:grid-cols-8">
-              {tiles.map((subcategory) => (
-                <Link
-                  key={subcategory.id}
-                  to="/category/$categoryKey"
-                  params={{ categoryKey: subcategory.key }}
-                  className="min-w-0 text-center"
-                >
-                  <div className="aspect-square overflow-hidden rounded-2xl bg-secondary/70">
-                    {subcategory.image_url ? (
-                      <img
-                        src={subcategory.image_url}
-                        alt={subcategory.label}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-3xl sm:text-5xl">
-                        No image
-                      </div>
-                    )}
-                  </div>
-                  <p className="mt-2 line-clamp-2 text-xs font-bold leading-tight sm:text-sm">
-                    {subcategory.label}
-                  </p>
-                </Link>
-              ))}
-            </div>
-          </section>
-        );
-      })}
+      {!query &&
+        categorySections.map((section) => {
+          const tiles = [...section.subcategory_section_items]
+            .sort((a, b) => a.display_order - b.display_order)
+            .map((item) =>
+              subcategories.find((subcategory) => subcategory.id === item.subcategory_id),
+            )
+            .filter((subcategory): subcategory is Subcategory => Boolean(subcategory))
+            .slice(0, section.rows * 4);
+          if (!tiles.length) return null;
+          return (
+            <section
+              key={section.id}
+              className="px-4 pb-4 pt-6"
+              style={{ order: section.display_order }}
+            >
+              <h2 className="mb-3 text-lg font-bold">{section.title}</h2>
+              <div className="grid grid-cols-4 gap-x-2.5 gap-y-5 sm:grid-cols-6 lg:grid-cols-8">
+                {tiles.map((subcategory) => (
+                  <Link
+                    key={subcategory.id}
+                    to="/category/$categoryKey"
+                    params={{ categoryKey: subcategory.key }}
+                    className="min-w-0 text-center"
+                  >
+                    <div className="aspect-square overflow-hidden rounded-2xl bg-secondary/70">
+                      {subcategory.image_url ? (
+                        <img
+                          src={subcategory.image_url}
+                          alt={subcategory.label}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-3xl sm:text-5xl">
+                          No image
+                        </div>
+                      )}
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-xs font-bold leading-tight sm:text-sm">
+                      {subcategory.label}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          );
+        })}
 
-      {isLoading ? (
+      {isLoading || isSearchLoading ? (
         <div className="mx-4 mt-6 h-56 animate-pulse rounded-2xl bg-muted" />
       ) : visibleSections.length === 0 ? (
         <p className="mx-4 my-8 rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
@@ -549,14 +576,16 @@ function HomePage() {
           >
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-bold">{section.title}</h2>
-              <Link
-                to="/product-sections/$sectionId"
-                params={{ sectionId: section.id }}
-                className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-              >
-                View all products
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
+              {section.id !== "catalog-search-results" && (
+                <Link
+                  to="/product-sections/$sectionId"
+                  params={{ sectionId: section.id }}
+                  className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                >
+                  View all products
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              )}
             </div>
             {section.products.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
@@ -630,18 +659,19 @@ function HomePage() {
                       </div>
                     </div>
                   ))}
-                {section.layout_mode === "horizontal" && (
-                  <Link
-                    to="/product-sections/$sectionId"
-                    params={{ sectionId: section.id }}
-                    className="flex min-h-56 w-36 shrink-0 snap-start flex-col items-center justify-center gap-3 rounded-xl border border-primary/25 bg-primary/5 p-4 text-center text-primary shadow-card transition hover:-translate-y-0.5 hover:bg-primary/10 hover:shadow-pop sm:w-40"
-                  >
-                    <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                      <ArrowRight className="h-5 w-5" />
-                    </span>
-                    <span className="text-sm font-bold">View all products</span>
-                  </Link>
-                )}
+                {section.layout_mode === "horizontal" &&
+                  section.id !== "catalog-search-results" && (
+                    <Link
+                      to="/product-sections/$sectionId"
+                      params={{ sectionId: section.id }}
+                      className="flex min-h-56 w-36 shrink-0 snap-start flex-col items-center justify-center gap-3 rounded-xl border border-primary/25 bg-primary/5 p-4 text-center text-primary shadow-card transition hover:-translate-y-0.5 hover:bg-primary/10 hover:shadow-pop sm:w-40"
+                    >
+                      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <ArrowRight className="h-5 w-5" />
+                      </span>
+                      <span className="text-sm font-bold">View all products</span>
+                    </Link>
+                  )}
               </div>
             )}
           </section>
