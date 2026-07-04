@@ -487,81 +487,96 @@ function ProductsPage() {
         </Select>
       </div>
 
-      {selectedIds.length > 0 && (
-        <div className="flex flex-col gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 lg:flex-row lg:items-end">
-          <div className="min-w-40">
-            <p className="font-bold">{selectedIds.length} products selected</p>
-            <p className="text-xs text-muted-foreground">Assign all of them together.</p>
+      {(selectedIds.length > 0 || latestDeletion?.deletion_batch_id) && (
+        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              {selectedIds.length > 0 ? (
+                <>
+                  <p className="font-bold">{selectedIds.length} products selected</p>
+                  <p className="text-xs text-muted-foreground">Assign all of them together.</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-bold">Last deleted: {latestDeletedCount} products</p>
+                  <p className="text-xs text-muted-foreground">Saved safely in trash.</p>
+                </>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {latestDeletion?.deletion_batch_id && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={undoDeleteMut.isPending}
+                  onClick={() => undoDeleteMut.mutate(latestDeletion.deletion_batch_id!)}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Undo
+                </Button>
+              )}
+              {selectedIds.length > 0 && (
+                <Button
+                  size="icon"
+                  variant="destructive"
+                  className="h-8 w-8"
+                  title="Delete selected products"
+                  aria-label="Delete selected products"
+                  disabled={bulkDeleteMut.isPending}
+                  onClick={() => {
+                    if (confirm(`Move ${selectedIds.length} selected products to trash?`)) {
+                      bulkDeleteMut.mutate();
+                    }
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="space-y-1 lg:w-56">
-            <Label>Category</Label>
-            <Select
-              value={bulkCategory}
-              onValueChange={(value) => {
-                setBulkCategory(value);
-                setBulkSubcategory("");
-              }}
-            >
-              <SelectTrigger><SelectValue placeholder="Choose category" /></SelectTrigger>
-              <SelectContent>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.key}>{category.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1 lg:w-64">
-            <Label>Subcategory (optional)</Label>
-            <Select
-              value={bulkSubcategory || "none"}
-              onValueChange={(value) => setBulkSubcategory(value === "none" ? "" : value)}
-              disabled={!bulkCategory}
-            >
-              <SelectTrigger><SelectValue placeholder="Choose subcategory" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {bulkSubcategories.map((subcategory) => (
-                  <SelectItem key={subcategory.id} value={subcategory.id}>{subcategory.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button
-            disabled={!bulkCategory || bulkCategoryMut.isPending}
-            onClick={() => bulkCategoryMut.mutate()}
-          >
-            Apply to {selectedIds.length} products
-          </Button>
-          <Button
-            variant="destructive"
-            disabled={bulkDeleteMut.isPending}
-            onClick={() => {
-              if (confirm(`Move ${selectedIds.length} selected products to trash?`)) {
-                bulkDeleteMut.mutate();
-              }
-            }}
-          >
-            <Trash2 className="h-4 w-4" /> Delete selected
-          </Button>
-          <Button variant="ghost" onClick={() => setSelectedIds([])}>Clear</Button>
-        </div>
-      )}
-
-      {latestDeletion?.deletion_batch_id && (
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-500/35 bg-amber-500/10 p-4">
-          <div>
-            <p className="font-bold">Last deleted: {latestDeletedCount} products</p>
-            <p className="text-xs text-muted-foreground">
-              Saved in trash until you restore them.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            disabled={undoDeleteMut.isPending}
-            onClick={() => undoDeleteMut.mutate(latestDeletion.deletion_batch_id!)}
-          >
-            <RotateCcw className="h-4 w-4" /> Undo last delete
-          </Button>
+          {selectedIds.length > 0 && (
+            <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end">
+              <div className="space-y-1 lg:w-56">
+                <Label>Category</Label>
+                <Select
+                  value={bulkCategory}
+                  onValueChange={(value) => {
+                    setBulkCategory(value);
+                    setBulkSubcategory("");
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Choose category" /></SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.key}>{category.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1 lg:w-64">
+                <Label>Subcategory (optional)</Label>
+                <Select
+                  value={bulkSubcategory || "none"}
+                  onValueChange={(value) => setBulkSubcategory(value === "none" ? "" : value)}
+                  disabled={!bulkCategory}
+                >
+                  <SelectTrigger><SelectValue placeholder="Choose subcategory" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {bulkSubcategories.map((subcategory) => (
+                      <SelectItem key={subcategory.id} value={subcategory.id}>{subcategory.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                disabled={!bulkCategory || bulkCategoryMut.isPending}
+                onClick={() => bulkCategoryMut.mutate()}
+              >
+                Apply to {selectedIds.length} products
+              </Button>
+              <Button variant="ghost" onClick={() => setSelectedIds([])}>Clear</Button>
+            </div>
+          )}
         </div>
       )}
 
