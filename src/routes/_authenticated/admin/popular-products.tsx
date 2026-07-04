@@ -163,20 +163,29 @@ function ProductSectionsPage() {
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div className="grid gap-3 sm:grid-cols-[1fr_140px_auto]">
-            <Input
-              value={draft.title}
-              onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-              placeholder="Section title"
-            />
-            <Input
-              type="number"
-              min={0}
-              value={draft.display_order}
-              onChange={(event) =>
-                setDraft({ ...draft, display_order: Number(event.target.value) })
-              }
-            />
+          <div className="grid gap-3 sm:grid-cols-[1fr_180px_auto]">
+            <label className="space-y-1 text-sm font-medium">
+              <span>Section title</span>
+              <Input
+                value={draft.title}
+                onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+                placeholder="Section title"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              <span>Home position</span>
+              <Input
+                type="number"
+                min={0}
+                value={draft.display_order}
+                onChange={(event) =>
+                  setDraft({ ...draft, display_order: Number(event.target.value) })
+                }
+              />
+              <span className="block text-xs font-normal text-muted-foreground">
+                Smaller number appears higher.
+              </span>
+            </label>
             <label className="flex items-center gap-2 text-sm font-medium">
               <Switch
                 checked={draft.is_active}

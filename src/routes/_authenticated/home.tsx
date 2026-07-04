@@ -494,7 +494,11 @@ function HomePage() {
           .slice(0, section.rows * 4);
         if (!tiles.length) return null;
         return (
-          <section key={section.id} className="order-2 px-4 pb-4 pt-6">
+          <section
+            key={section.id}
+            className="px-4 pb-4 pt-6"
+            style={{ order: section.display_order }}
+          >
             <h2 className="mb-3 text-lg font-bold">{section.title}</h2>
             <div className="grid grid-cols-4 gap-x-2.5 gap-y-5 sm:grid-cols-6 lg:grid-cols-8">
               {tiles.map((subcategory) => (
@@ -535,7 +539,11 @@ function HomePage() {
         </p>
       ) : (
         visibleSections.map((section) => (
-          <section key={section.id} className="order-1 px-4 pb-4 pt-6">
+          <section
+            key={section.id}
+            className="px-4 pb-4 pt-6"
+            style={{ order: section.display_order }}
+          >
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-bold">{section.title}</h2>
               <Link

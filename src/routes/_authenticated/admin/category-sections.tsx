@@ -117,16 +117,26 @@ function CategorySectionsPage() {
             </Button>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Input
-              placeholder="Section title"
-              value={draft.title}
-              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-            />
-            <Input
-              type="number"
-              value={draft.display_order}
-              onChange={(e) => setDraft({ ...draft, display_order: Number(e.target.value) })}
-            />
+            <label className="space-y-1 text-sm font-medium">
+              <span>Section title</span>
+              <Input
+                placeholder="Section title"
+                value={draft.title}
+                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              <span>Home position</span>
+              <Input
+                type="number"
+                min={0}
+                value={draft.display_order}
+                onChange={(e) => setDraft({ ...draft, display_order: Number(e.target.value) })}
+              />
+              <span className="block text-xs font-normal text-muted-foreground">
+                Smaller number appears higher on the home page.
+              </span>
+            </label>
             <label className="flex items-center gap-2">
               <Switch
                 checked={draft.is_active}
