@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { ChevronDown, Download, History, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
+  adminBulkAssignProductCategory,
   adminBulkImportProducts,
   adminListStores,
   adminListProducts,
@@ -21,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -135,6 +137,7 @@ function ProductsPage() {
   const listSubcategories = useServerFn(adminListSubcategories);
   const save = useServerFn(adminSaveProduct);
   const bulkImport = useServerFn(adminBulkImportProducts);
+  const bulkAssignCategory = useServerFn(adminBulkAssignProductCategory);
   const remove = useServerFn(adminDeleteProduct);
   const history = useServerFn(adminPriceHistory);
 
@@ -147,6 +150,9 @@ function ProductsPage() {
   const [importStoreId, setImportStoreId] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [historyFor, setHistoryFor] = useState<ProductRow | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkCategory, setBulkCategory] = useState("");
+  const [bulkSubcategory, setBulkSubcategory] = useState("");
 
   const { data: stores = [] } = useQuery({
     queryKey: ["admin-stores"],
@@ -242,7 +248,32 @@ function ProductsPage() {
     onError: (e: Error) => toast.error(userErrorMessage(e)),
   });
 
+  const bulkCategoryMut = useMutation({
+    mutationFn: () =>
+      bulkAssignCategory({
+        data: {
+          product_ids: selectedIds,
+          category: bulkCategory,
+          subcategory_id: bulkSubcategory || null,
+        },
+      }),
+    onSuccess: (result) => {
+      toast.success(`${result.updated} products updated`);
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
+      setSelectedIds([]);
+      setBulkCategory("");
+      setBulkSubcategory("");
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "Could not update products")),
+  });
+
   const filtered = products.filter((p) => !q || p.name.toLowerCase().includes(q.toLowerCase()));
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((product) => selectedIds.includes(product.id));
+  const bulkSubcategories = subcategories.filter((subcategory) => {
+    const parent = categories.find((category) => category.id === subcategory.category_id);
+    return parent?.key === bulkCategory;
+  });
   const matchingSubcategories = subcategories.filter((subcategory) => {
     const parent = categories.find((category) => category.id === subcategory.category_id);
     return `${subcategory.label} ${parent?.label ?? ""}`
@@ -422,6 +453,55 @@ function ProductsPage() {
         </Select>
       </div>
 
+      {selectedIds.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 lg:flex-row lg:items-end">
+          <div className="min-w-40">
+            <p className="font-bold">{selectedIds.length} products selected</p>
+            <p className="text-xs text-muted-foreground">Assign all of them together.</p>
+          </div>
+          <div className="space-y-1 lg:w-56">
+            <Label>Category</Label>
+            <Select
+              value={bulkCategory}
+              onValueChange={(value) => {
+                setBulkCategory(value);
+                setBulkSubcategory("");
+              }}
+            >
+              <SelectTrigger><SelectValue placeholder="Choose category" /></SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.key}>{category.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1 lg:w-64">
+            <Label>Subcategory (optional)</Label>
+            <Select
+              value={bulkSubcategory || "none"}
+              onValueChange={(value) => setBulkSubcategory(value === "none" ? "" : value)}
+              disabled={!bulkCategory}
+            >
+              <SelectTrigger><SelectValue placeholder="Choose subcategory" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {bulkSubcategories.map((subcategory) => (
+                  <SelectItem key={subcategory.id} value={subcategory.id}>{subcategory.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            disabled={!bulkCategory || bulkCategoryMut.isPending}
+            onClick={() => bulkCategoryMut.mutate()}
+          >
+            Apply to {selectedIds.length} products
+          </Button>
+          <Button variant="ghost" onClick={() => setSelectedIds([])}>Clear</Button>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="space-y-3">
           {[0, 1, 2].map((i) => (
@@ -433,6 +513,19 @@ function ProductsPage() {
           <table className="w-full min-w-[640px] text-sm">
             <thead className="border-b border-border/60 bg-muted/40 text-left text-xs uppercase text-muted-foreground">
               <tr>
+                <th className="w-12 px-4 py-3">
+                  <Checkbox
+                    aria-label="Select all visible products"
+                    checked={allFilteredSelected}
+                    onCheckedChange={(checked) =>
+                      setSelectedIds((current) =>
+                        checked
+                          ? Array.from(new Set([...current, ...filtered.map((product) => product.id)]))
+                          : current.filter((id) => !filtered.some((product) => product.id === id)),
+                      )
+                    }
+                  />
+                </th>
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Store</th>
                 <th className="px-4 py-3">Price</th>
@@ -445,6 +538,19 @@ function ProductsPage() {
             <tbody>
               {filtered.map((p) => (
                 <tr key={p.id} className="border-b border-border/40 last:border-0">
+                  <td className="px-4 py-3">
+                    <Checkbox
+                      aria-label={`Select ${p.name}`}
+                      checked={selectedIds.includes(p.id)}
+                      onCheckedChange={(checked) =>
+                        setSelectedIds((current) =>
+                          checked
+                            ? [...current, p.id]
+                            : current.filter((id) => id !== p.id),
+                        )
+                      }
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <div className="font-semibold">{p.name}</div>
                     <div className="text-xs text-muted-foreground">
@@ -531,7 +637,7 @@ function ProductsPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                     No products found.
                   </td>
                 </tr>

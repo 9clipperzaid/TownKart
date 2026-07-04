@@ -740,6 +740,46 @@ export const adminSaveProduct = createServerFn({ method: "POST" })
     return { id: row.id };
   });
 
+export const adminBulkAssignProductCategory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) =>
+    z
+      .object({
+        product_ids: z.array(z.string().uuid()).min(1).max(500),
+        category: z.string().trim().min(1).max(40),
+        subcategory_id: z.string().uuid().nullable(),
+      })
+      .parse(value),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+
+    if (data.subcategory_id) {
+      const { data: subcategory, error } = await db
+        .from("subcategories")
+        .select("category_id, categories(key)")
+        .eq("id", data.subcategory_id)
+        .single();
+      if (error) throw new Error(error.message);
+      if (subcategory?.categories?.key !== data.category) {
+        throw new Error("Subcategory does not belong to the selected category.");
+      }
+    }
+
+    const { error } = await db
+      .from("products")
+      .update({ category: data.category, subcategory_id: data.subcategory_id })
+      .in("id", data.product_ids);
+    if (error) throw new Error(error.message);
+    await logAction(context.userId, "bulk_category_update", "product", undefined, {
+      product_count: data.product_ids.length,
+      category: data.category,
+      subcategory_id: data.subcategory_id,
+    });
+    return { updated: data.product_ids.length };
+  });
+
 const bulkProductSchema = z.object({
   products: z
     .array(productSchema.omit({ id: true }))
