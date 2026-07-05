@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Plus, Minus, Trash2, ShoppingBag, MapPin, LocateFixed } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { secureCheckout } from "@/lib/order.functions";
+import { getDeliveryQuote, secureCheckout } from "@/lib/order.functions";
 import { reverseGeocodeCoordinates } from "@/lib/maps.functions";
 import { formatINR } from "@/lib/format";
 import { userErrorMessage } from "@/lib/utils";
@@ -47,8 +47,6 @@ type CartRow = {
   } | null;
 };
 
-const DELIVERY_FEE = 25;
-
 type DeliveryLocation = {
   latitude: number;
   longitude: number;
@@ -59,6 +57,7 @@ function CartPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const checkoutServer = useServerFn(secureCheckout);
+  const deliveryQuoteServer = useServerFn(getDeliveryQuote);
   const reverseGeocode = useServerFn(reverseGeocodeCoordinates);
   const [address, setAddress] = useState("");
   const [addressLoaded, setAddressLoaded] = useState(false);
@@ -199,7 +198,28 @@ function CartPage() {
     (sum, r) => sum + Number(r.unit_price ?? r.products?.price ?? 0) * r.quantity,
     0,
   );
-  const total = subtotal > 0 ? subtotal + DELIVERY_FEE : 0;
+  const storeIds = [
+    ...new Set(items.map((item) => item.products?.store_id).filter(Boolean)),
+  ] as string[];
+  const {
+    data: deliveryQuote,
+    isFetching: isLoadingDeliveryQuote,
+    error: deliveryQuoteError,
+  } = useQuery({
+    queryKey: ["delivery-quote", storeIds, deliveryLocation?.latitude, deliveryLocation?.longitude],
+    queryFn: () =>
+      deliveryQuoteServer({
+        data: {
+          storeIds,
+          deliveryLatitude: deliveryLocation!.latitude,
+          deliveryLongitude: deliveryLocation!.longitude,
+        },
+      }),
+    enabled: storeIds.length > 0 && Boolean(deliveryLocation),
+    retry: false,
+  });
+  const deliveryFee = deliveryQuote?.totalFee ?? 0;
+  const total = subtotal > 0 ? subtotal + deliveryFee : 0;
 
   const fetchDeliveryLocation = () =>
     new Promise<DeliveryLocation | null>((resolve) => {
@@ -281,6 +301,8 @@ function CartPage() {
       }
 
       const currentLocation = deliveryLocation ?? (await fetchDeliveryLocation());
+      if (!currentLocation)
+        throw new Error("Please share your map location to calculate delivery charges.");
       await checkoutServer({
         data: {
           address: address.trim(),
@@ -407,7 +429,28 @@ function CartPage() {
 
       <div className="mt-5 rounded-2xl bg-card p-4 shadow-card">
         <Row label="Subtotal" value={formatINR(subtotal)} />
-        <Row label="Delivery fee" value={formatINR(DELIVERY_FEE)} />
+        <Row
+          label="Delivery fee"
+          value={
+            isLoadingDeliveryQuote
+              ? "Calculating..."
+              : deliveryQuoteError
+                ? "Unavailable"
+                : deliveryLocation
+                  ? formatINR(deliveryFee)
+                  : "Add location"
+          }
+        />
+        {deliveryQuote?.quotes.map((quote) => (
+          <p key={quote.storeId} className="text-right text-xs text-muted-foreground">
+            {quote.storeName}: {quote.distanceKm.toFixed(1)} km
+          </p>
+        ))}
+        {deliveryQuoteError ? (
+          <p className="pt-1 text-sm text-destructive">
+            {userErrorMessage(deliveryQuoteError, "Delivery is unavailable for this location.")}
+          </p>
+        ) : null}
         <div className="my-2 border-t border-border" />
         <Row label="Total" value={formatINR(total)} bold />
       </div>
@@ -415,7 +458,7 @@ function CartPage() {
       <Button
         size="lg"
         className="mt-4 h-13 w-full text-base"
-        disabled={checkout.isPending}
+        disabled={checkout.isPending || isLoadingDeliveryQuote || !deliveryQuote}
         onClick={() => checkout.mutate()}
       >
         {checkout.isPending ? "Placing order..." : `Place order - ${formatINR(total)}`}

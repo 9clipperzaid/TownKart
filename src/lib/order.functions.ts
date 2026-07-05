@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { sendNewOrderPushNotification } from "@/lib/fcm.server";
+import { calculateDeliveryFee, distanceInKm, RIDER_HOME_LOCATION } from "@/lib/delivery-pricing";
 
 const addressSchema = z.string().trim().min(10, "Add a complete delivery address").max(500);
 const latitudeSchema = z.number().min(-90).max(90).optional().nullable();
@@ -41,6 +42,49 @@ async function canManageStore(userId: string, storeId: string | null) {
   return store?.owner_id === userId;
 }
 
+const deliveryQuoteSchema = z.object({
+  storeIds: z.array(z.string().uuid()).min(1).max(20),
+  deliveryLatitude: z.number().min(-90).max(90),
+  deliveryLongitude: z.number().min(-180).max(180),
+});
+
+export const getDeliveryQuote = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => deliveryQuoteSchema.parse(data))
+  .handler(async ({ data }) => {
+    const supabaseAdmin = await getAdmin();
+    const storeIds = [...new Set(data.storeIds)];
+    const { data: stores, error } = await supabaseAdmin
+      .from("stores")
+      .select("id, name, delivery_radius_km, delivery_available")
+      .in("id", storeIds);
+    if (error) throw new Error("Could not calculate the delivery charge.");
+    if ((stores ?? []).length !== storeIds.length) throw new Error("A store could not be found.");
+
+    const quotes = (stores ?? []).map((store) => {
+      if (!store.delivery_available) throw new Error(`${store.name} does not offer delivery.`);
+      const distanceKm = distanceInKm(RIDER_HOME_LOCATION, {
+        latitude: data.deliveryLatitude,
+        longitude: data.deliveryLongitude,
+      });
+      if (distanceKm > Number(store.delivery_radius_km)) {
+        throw new Error(
+          `${store.name} delivers within ${store.delivery_radius_km} km. You are ${distanceKm.toFixed(1)} km away.`,
+        );
+      }
+      return {
+        storeId: store.id,
+        storeName: store.name,
+        distanceKm,
+        fee: calculateDeliveryFee(distanceKm),
+      };
+    });
+
+    return {
+      quotes,
+      totalFee: quotes.reduce((total, quote) => total + quote.fee, 0),
+    };
+  });
+
 export const secureCheckout = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
@@ -72,7 +116,7 @@ export const secureCheckout = createServerFn({ method: "POST" })
     const { data: rows, error } = await supabaseAdmin
       .from("cart_items")
       .select(
-        "id, quantity, product_id, selected_unit, unit_price, products(id, name, price, discount_price, is_available, stock_quantity, store_id, stores(id, name, delivery_fee, min_order, is_active))",
+        "id, quantity, product_id, selected_unit, unit_price, products(id, name, price, discount_price, is_available, stock_quantity, store_id, stores(id, name, delivery_fee, delivery_available, delivery_radius_km, min_order, is_active))",
       )
       .eq("user_id", userId);
     if (error) throw new Error("Could not load cart.");
@@ -110,6 +154,9 @@ export const secureCheckout = createServerFn({ method: "POST" })
     if (data.paymentMethod === "online" && !data.paymentReference) {
       throw new Error("Add your online payment reference/UTR number.");
     }
+    if (data.deliveryLatitude == null || data.deliveryLongitude == null) {
+      throw new Error("Please share your map location to calculate the delivery charge.");
+    }
 
     const groups = new Map<string, typeof rows>();
     for (const row of rows) {
@@ -139,7 +186,17 @@ export const secureCheckout = createServerFn({ method: "POST" })
       if (subtotal < Number(store.min_order ?? 0)) {
         throw new Error(`${store.name} has a minimum order of Rs ${store.min_order}.`);
       }
-      const deliveryFee = Number(store.delivery_fee ?? 25);
+      if (!store.delivery_available) throw new Error(`${store.name} does not offer delivery.`);
+      const deliveryDistanceKm = distanceInKm(RIDER_HOME_LOCATION, {
+        latitude: data.deliveryLatitude,
+        longitude: data.deliveryLongitude,
+      });
+      if (deliveryDistanceKm > Number(store.delivery_radius_km)) {
+        throw new Error(
+          `${store.name} delivers within ${store.delivery_radius_km} km. You are ${deliveryDistanceKm.toFixed(1)} km away.`,
+        );
+      }
+      const deliveryFee = calculateDeliveryFee(deliveryDistanceKm);
       const total = subtotal + deliveryFee;
 
       const { data: order, error: orderErr } = await supabaseAdmin
