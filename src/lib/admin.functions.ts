@@ -1306,6 +1306,108 @@ export const adminDeleteCategorySection = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const adminListStoreSections = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { data, error } = await db
+      .from("marketplace_settings")
+      .select("value")
+      .eq("key", "store_sections")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data?.value?.sections ?? [];
+  });
+
+export const getStoreSections = createServerFn({ method: "GET" }).handler(async () => {
+  const db = (await getAdmin()) as any;
+  const { data } = await db
+    .from("marketplace_settings")
+    .select("value")
+    .eq("key", "store_sections")
+    .maybeSingle();
+  const sections = (data?.value?.sections ?? []) as any[];
+  const storeIds = [...new Set(sections.flatMap((section) => section.store_ids ?? []))];
+  if (!storeIds.length) return [];
+  const { data: stores, error } = await db
+    .from("stores")
+    .select("id, name, description, category, rating, delivery_minutes, banner_url, logo_url")
+    .in("id", storeIds)
+    .eq("is_active", true);
+  if (error) throw new Error(error.message);
+  const storeMap = new Map((stores ?? []).map((store: any) => [store.id, store]));
+  return sections
+    .filter((section) => section.is_active)
+    .sort((a, b) => a.display_order - b.display_order)
+    .map((section) => ({
+      ...section,
+      stores: (section.store_ids ?? []).map((id: string) => storeMap.get(id)).filter(Boolean),
+    }))
+    .filter((section) => section.stores.length > 0);
+});
+
+const storeSectionSchema = z.object({
+  id: z.string().uuid().optional(),
+  title: z.string().trim().min(1).max(120),
+  display_order: z.number().int().min(0).max(1000000),
+  is_active: z.boolean(),
+  store_ids: z.array(z.string().uuid()).max(20),
+});
+
+export const adminSaveStoreSection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) => storeSectionSchema.parse(value))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { data: current } = await db
+      .from("marketplace_settings")
+      .select("value")
+      .eq("key", "store_sections")
+      .maybeSingle();
+    const sections = [...(current?.value?.sections ?? [])];
+    const id = data.id ?? crypto.randomUUID();
+    const payload = { ...data, id };
+    const index = sections.findIndex((section: any) => section.id === id);
+    if (index >= 0) sections[index] = payload;
+    else sections.push(payload);
+    const { error } = await db.from("marketplace_settings").upsert({
+      key: "store_sections",
+      value: { sections },
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(error.message);
+    await logAction(context.userId, data.id ? "update" : "create", "store_section", id, {
+      title: data.title,
+    });
+    return { id };
+  });
+
+export const adminDeleteStoreSection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: { id: string }) => z.object({ id: z.string().uuid() }).parse(value))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { data: current } = await db
+      .from("marketplace_settings")
+      .select("value")
+      .eq("key", "store_sections")
+      .maybeSingle();
+    const sections = (current?.value?.sections ?? []).filter(
+      (section: any) => section.id !== data.id,
+    );
+    const { error } = await db.from("marketplace_settings").upsert({
+      key: "store_sections",
+      value: { sections },
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(error.message);
+    await logAction(context.userId, "delete", "store_section", data.id);
+    return { ok: true };
+  });
+
 // ---------------------------------------------------------------------------
 // Dynamic pricing
 // ---------------------------------------------------------------------------

@@ -31,6 +31,7 @@ import { Route as AuthenticatedCategoryCategoryKeyRouteImport } from './routes/_
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin/users'
 import { Route as AuthenticatedAdminSubcategoriesRouteImport } from './routes/_authenticated/admin/subcategories'
 import { Route as AuthenticatedAdminStoresRouteImport } from './routes/_authenticated/admin/stores'
+import { Route as AuthenticatedAdminStoreSectionsRouteImport } from './routes/_authenticated/admin/store-sections'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin/settings'
 import { Route as AuthenticatedAdminProductsRouteImport } from './routes/_authenticated/admin/products'
 import { Route as AuthenticatedAdminPricingRouteImport } from './routes/_authenticated/admin/pricing'
@@ -159,6 +160,12 @@ const AuthenticatedAdminStoresRoute =
     path: '/stores',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminStoreSectionsRoute =
+  AuthenticatedAdminStoreSectionsRouteImport.update({
+    id: '/store-sections',
+    path: '/store-sections',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminSettingsRoute =
   AuthenticatedAdminSettingsRouteImport.update({
     id: '/settings',
@@ -248,6 +255,7 @@ export interface FileRoutesByFullPath {
   '/admin/pricing': typeof AuthenticatedAdminPricingRoute
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/admin/store-sections': typeof AuthenticatedAdminStoreSectionsRoute
   '/admin/stores': typeof AuthenticatedAdminStoresRoute
   '/admin/subcategories': typeof AuthenticatedAdminSubcategoriesRoute
   '/admin/users': typeof AuthenticatedAdminUsersRouteWithChildren
@@ -281,6 +289,7 @@ export interface FileRoutesByTo {
   '/admin/pricing': typeof AuthenticatedAdminPricingRoute
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/admin/store-sections': typeof AuthenticatedAdminStoreSectionsRoute
   '/admin/stores': typeof AuthenticatedAdminStoresRoute
   '/admin/subcategories': typeof AuthenticatedAdminSubcategoriesRoute
   '/admin/users': typeof AuthenticatedAdminUsersRouteWithChildren
@@ -317,6 +326,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/pricing': typeof AuthenticatedAdminPricingRoute
   '/_authenticated/admin/products': typeof AuthenticatedAdminProductsRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/_authenticated/admin/store-sections': typeof AuthenticatedAdminStoreSectionsRoute
   '/_authenticated/admin/stores': typeof AuthenticatedAdminStoresRoute
   '/_authenticated/admin/subcategories': typeof AuthenticatedAdminSubcategoriesRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRouteWithChildren
@@ -353,6 +363,7 @@ export interface FileRouteTypes {
     | '/admin/pricing'
     | '/admin/products'
     | '/admin/settings'
+    | '/admin/store-sections'
     | '/admin/stores'
     | '/admin/subcategories'
     | '/admin/users'
@@ -386,6 +397,7 @@ export interface FileRouteTypes {
     | '/admin/pricing'
     | '/admin/products'
     | '/admin/settings'
+    | '/admin/store-sections'
     | '/admin/stores'
     | '/admin/subcategories'
     | '/admin/users'
@@ -421,6 +433,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/pricing'
     | '/_authenticated/admin/products'
     | '/_authenticated/admin/settings'
+    | '/_authenticated/admin/store-sections'
     | '/_authenticated/admin/stores'
     | '/_authenticated/admin/subcategories'
     | '/_authenticated/admin/users'
@@ -597,6 +610,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminStoresRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/store-sections': {
+      id: '/_authenticated/admin/store-sections'
+      path: '/store-sections'
+      fullPath: '/admin/store-sections'
+      preLoaderRoute: typeof AuthenticatedAdminStoreSectionsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/settings': {
       id: '/_authenticated/admin/settings'
       path: '/settings'
@@ -702,6 +722,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminPricingRoute: typeof AuthenticatedAdminPricingRoute
   AuthenticatedAdminProductsRoute: typeof AuthenticatedAdminProductsRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
+  AuthenticatedAdminStoreSectionsRoute: typeof AuthenticatedAdminStoreSectionsRoute
   AuthenticatedAdminStoresRoute: typeof AuthenticatedAdminStoresRoute
   AuthenticatedAdminSubcategoriesRoute: typeof AuthenticatedAdminSubcategoriesRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRouteWithChildren
@@ -722,6 +743,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminPricingRoute: AuthenticatedAdminPricingRoute,
     AuthenticatedAdminProductsRoute: AuthenticatedAdminProductsRoute,
     AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
+    AuthenticatedAdminStoreSectionsRoute: AuthenticatedAdminStoreSectionsRoute,
     AuthenticatedAdminStoresRoute: AuthenticatedAdminStoresRoute,
     AuthenticatedAdminSubcategoriesRoute: AuthenticatedAdminSubcategoriesRoute,
     AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRouteWithChildren,

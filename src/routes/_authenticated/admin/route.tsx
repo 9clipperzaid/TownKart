@@ -59,6 +59,7 @@ const NAV = [
   { to: "/admin/products", label: "Products", icon: Package },
   { to: "/admin/popular-products", label: "Product Sections", icon: Rows3 },
   { to: "/admin/category-sections", label: "Category Sections", icon: Grid2X2 },
+  { to: "/admin/store-sections", label: "Store Sections", icon: Store },
   { to: "/admin/pricing", label: "Pricing", icon: TrendingUp },
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/notifications", label: "Notifications", icon: Bell },
@@ -181,7 +182,7 @@ function AdminShell() {
                   stopOrderAlertSound();
                   navigate({
                     to: "/admin/orders",
-                    search: { orderId: order.id } as any,
+                    search: { orderId: order.id },
                   });
                 },
               }

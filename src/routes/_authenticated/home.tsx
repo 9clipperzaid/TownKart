@@ -12,6 +12,8 @@ import {
   UtensilsCrossed,
   Pill,
   Bike,
+  Clock,
+  Star,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,7 +23,8 @@ import { cn, userErrorMessage } from "@/lib/utils";
 import { CallToOrder } from "@/components/CallToOrder";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { getCategorySections, getHomeBanners } from "@/lib/admin.functions";
+import { getCategorySections, getHomeBanners, getStoreSections } from "@/lib/admin.functions";
+import { categoryImage } from "@/lib/categories";
 import townKartHeroWatermark from "@/assets/townkart-hero-watermark.png";
 
 export const Route = createFileRoute("/_authenticated/home")({
@@ -82,6 +85,22 @@ type CategorySection = {
   subcategory_section_items: { subcategory_id: string; display_order: number }[];
 };
 
+type StoreSection = {
+  id: string;
+  title: string;
+  display_order: number;
+  stores: {
+    id: string;
+    name: string;
+    description: string | null;
+    category: string;
+    rating: number;
+    delivery_minutes: number;
+    banner_url: string | null;
+    logo_url: string | null;
+  }[];
+};
+
 type HomeBanner = {
   id: string;
   title: string;
@@ -101,6 +120,7 @@ function HomePage() {
   const queryClient = useQueryClient();
   const loadHomeBanners = useServerFn(getHomeBanners);
   const loadCategorySections = useServerFn(getCategorySections);
+  const loadStoreSections = useServerFn(getStoreSections);
   const [active, setActive] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [bannerIndex, setBannerIndex] = useState(0);
@@ -202,6 +222,11 @@ function HomePage() {
   const { data: categorySections = [] } = useQuery({
     queryKey: ["home-category-sections"],
     queryFn: () => loadCategorySections() as Promise<CategorySection[]>,
+  });
+
+  const { data: storeSections = [] } = useQuery({
+    queryKey: ["home-store-sections"],
+    queryFn: () => loadStoreSections() as Promise<StoreSection[]>,
   });
 
   const query = q.trim().toLowerCase();
@@ -612,6 +637,56 @@ function HomePage() {
             </section>
           );
         })}
+
+      {!query &&
+        storeSections.map((section) => (
+          <section key={section.id} className="px-4 pb-4 pt-6">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-bold">{section.title}</h2>
+              <Link
+                to="/nearby"
+                className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+              >
+                View all stores <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            <div className="flex snap-x gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {section.stores.map((store) => (
+                <Link
+                  key={store.id}
+                  to="/store/$storeId"
+                  params={{ storeId: store.id }}
+                  className="group w-56 shrink-0 snap-start overflow-hidden rounded-2xl border border-border/70 bg-card shadow-card transition hover:-translate-y-0.5 hover:shadow-pop sm:w-64"
+                >
+                  <div className="aspect-[16/9] overflow-hidden bg-secondary">
+                    <img
+                      src={store.banner_url || store.logo_url || categoryImage(store.category)}
+                      alt={store.name}
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div className="p-3">
+                    <h3 className="truncate text-sm font-extrabold">{store.name}</h3>
+                    <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+                      {store.description || "Shop local products"}
+                    </p>
+                    <div className="mt-2 flex items-center gap-3 text-xs font-semibold text-muted-foreground">
+                      <span className="flex items-center gap-1 text-success">
+                        <Star className="h-3.5 w-3.5 fill-current" />
+                        {Number(store.rating).toFixed(1)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5" />
+                        {store.delivery_minutes} min
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ))}
 
       {isLoading || isSearchLoading ? (
         <div className="mx-4 mt-6 h-56 animate-pulse rounded-2xl bg-muted" />
