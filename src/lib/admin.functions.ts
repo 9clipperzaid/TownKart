@@ -1706,6 +1706,18 @@ const homeBannerSchema = z.object({
   title: z.string().trim().min(1).max(120),
   subtitle: z.string().trim().max(220).optional().nullable(),
   image_url: z.string().trim().max(500).optional().nullable(),
+  type: z.enum(["template", "image", "hybrid"]).default("image"),
+  badge: z.string().trim().max(40).optional().nullable(),
+  cta_label: z.string().trim().max(30).optional().nullable(),
+  cta_link: z
+    .string()
+    .trim()
+    .max(200)
+    .regex(/^\/[a-zA-Z0-9/_-]*$/, "Banner link must be an internal path such as /nearby")
+    .optional()
+    .nullable(),
+  theme: z.enum(["emerald", "sunset", "midnight", "berry"]).default("emerald"),
+  icon: z.enum(["grocery", "food", "medicine", "delivery"]).default("grocery"),
   is_enabled: z.boolean().default(true),
   sort_order: z.number().int().min(0).max(9999).default(0),
 });
@@ -1720,6 +1732,12 @@ const defaultHomeBanner = {
   title: "Groceries, food, medicines and local essentials delivered fast.",
   subtitle: "Nehtaur's First Online Kart",
   image_url: null,
+  type: "template" as const,
+  badge: "Everything local, delivered",
+  cta_label: "Explore stores",
+  cta_link: "/nearby",
+  theme: "emerald" as const,
+  icon: "grocery" as const,
   is_enabled: true,
   sort_order: 1,
 };
@@ -1845,7 +1863,22 @@ export const getHomeBanners = createServerFn({ method: "GET" }).handler(async ()
     .select("value")
     .eq("key", "home_banners")
     .maybeSingle();
-  const parsed = homeBannersSchema.safeParse(data?.value);
+  const rawValue = data?.value as { banners?: unknown[] } | null | undefined;
+  const normalizedValue =
+    rawValue && Array.isArray(rawValue.banners)
+      ? {
+          ...rawValue,
+          banners: rawValue.banners.map((banner) => {
+            if (!banner || typeof banner !== "object" || "type" in banner) return banner;
+            const legacy = banner as { id?: string; image_url?: string | null };
+            return {
+              ...legacy,
+              type: legacy.image_url ? "image" : "template",
+            };
+          }),
+        }
+      : data?.value;
+  const parsed = homeBannersSchema.safeParse(normalizedValue);
   if (!parsed.success) return [defaultHomeBanner];
 
   const banners = parsed.data.banners;

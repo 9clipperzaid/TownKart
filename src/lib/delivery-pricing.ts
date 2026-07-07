@@ -1,6 +1,7 @@
-export const DELIVERY_BASE_DISTANCE_KM = 1.5;
+export const DELIVERY_BASE_DISTANCE_KM = 0.5;
 export const DELIVERY_BASE_FEE = 33;
-export const DELIVERY_EXTRA_FEE_PER_KM = 8;
+export const DELIVERY_EXTRA_DISTANCE_STEP_KM = 0.5;
+export const DELIVERY_EXTRA_FEE_PER_STEP = 6;
 
 // Fixed rider dispatch point: 29°19'09.3"N 78°23'16.9"E, Nethaur, Uttar Pradesh.
 export const RIDER_HOME_LOCATION = {
@@ -25,8 +26,9 @@ export function distanceInKm(from: Coordinates, to: Coordinates) {
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/** Rs 33 through 1.5 km, then Rs 8 for each additional km (pro-rated, rounded up). */
+/** Rs 33 through 0.5 km, then Rs 6 for each started additional 0.5 km. */
 export function calculateDeliveryFee(distanceKm: number) {
   const additionalKm = Math.max(0, distanceKm - DELIVERY_BASE_DISTANCE_KM);
-  return Math.ceil(DELIVERY_BASE_FEE + additionalKm * DELIVERY_EXTRA_FEE_PER_KM);
+  const additionalSteps = Math.ceil(additionalKm / DELIVERY_EXTRA_DISTANCE_STEP_KM);
+  return DELIVERY_BASE_FEE + additionalSteps * DELIVERY_EXTRA_FEE_PER_STEP;
 }

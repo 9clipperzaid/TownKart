@@ -21,6 +21,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({
   component: SettingsPage,
@@ -54,6 +61,12 @@ function SettingsPage() {
       title: string;
       subtitle: string;
       image_url: string;
+      type: "template" | "image" | "hybrid";
+      badge: string;
+      cta_label: string;
+      cta_link: string;
+      theme: "emerald" | "sunset" | "midnight" | "berry";
+      icon: "grocery" | "food" | "medicine" | "delivery";
       is_enabled: boolean;
       sort_order: number;
     }[]
@@ -97,6 +110,12 @@ function SettingsPage() {
           title: banner.title,
           subtitle: banner.subtitle ?? "",
           image_url: banner.image_url ?? "",
+          type: banner.type ?? (banner.image_url ? "image" : "template"),
+          badge: banner.badge ?? "",
+          cta_label: banner.cta_label ?? "",
+          cta_link: banner.cta_link ?? "",
+          theme: banner.theme ?? "emerald",
+          icon: banner.icon ?? "grocery",
           is_enabled: banner.is_enabled,
           sort_order: banner.sort_order ?? index + 1,
         })),
@@ -138,6 +157,9 @@ function SettingsPage() {
             sort_order: Number.isFinite(banner.sort_order) ? banner.sort_order : index + 1,
             subtitle: banner.subtitle || null,
             image_url: banner.image_url || null,
+            badge: banner.badge || null,
+            cta_label: banner.cta_label || null,
+            cta_link: banner.cta_link || null,
           })),
         },
       }),
@@ -190,6 +212,12 @@ function SettingsPage() {
         title: "Fresh offers from TownKart",
         subtitle: "Nehtaur's First Online Kart",
         image_url: "",
+        type: "template",
+        badge: "Fresh deals near you",
+        cta_label: "Shop now",
+        cta_link: "/nearby",
+        theme: "emerald",
+        icon: "grocery",
         is_enabled: true,
         sort_order: nextSortOrder,
       },
@@ -367,10 +395,38 @@ function SettingsPage() {
                   </div>
                 </div>
 
+                <div className="space-y-1.5">
+                  <Label>Banner type</Label>
+                  <Select
+                    disabled={banner.id === "default-townkart"}
+                    value={banner.type}
+                    onValueChange={(type: (typeof banner)["type"]) => updateBanner(index, { type })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="template">Responsive template (recommended)</SelectItem>
+                      <SelectItem value="image">Full image</SelectItem>
+                      <SelectItem value="hybrid">Image + responsive content</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="grid gap-4 md:grid-cols-[1fr_1.2fr]">
-                  {banner.id === "default-townkart" ? (
-                    <div className="flex min-h-40 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 p-4 text-center text-sm font-medium text-muted-foreground">
-                      Built-in TownKart visual
+                  {banner.type === "template" || banner.id === "default-townkart" ? (
+                    <div className="flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-secondary/50 p-4 text-center">
+                      <span className="text-3xl">
+                        {banner.icon === "food"
+                          ? "🍲"
+                          : banner.icon === "medicine"
+                            ? "💊"
+                            : banner.icon === "delivery"
+                              ? "🛵"
+                              : "🛍️"}
+                      </span>
+                      <span className="mt-2 text-sm font-bold">Responsive template preview</span>
+                      <span className="text-xs text-muted-foreground">No image required</span>
                     </div>
                   ) : (
                     <ImageUpload
@@ -407,6 +463,76 @@ function SettingsPage() {
                         placeholder="Nehtaur's First Online Kart"
                       />
                     </div>
+                    {banner.type !== "image" && (
+                      <>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label>Theme</Label>
+                            <Select
+                              value={banner.theme}
+                              onValueChange={(theme: (typeof banner)["theme"]) =>
+                                updateBanner(index, { theme })
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="emerald">Emerald</SelectItem>
+                                <SelectItem value="sunset">Sunset</SelectItem>
+                                <SelectItem value="midnight">Midnight</SelectItem>
+                                <SelectItem value="berry">Berry</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Icon</Label>
+                            <Select
+                              value={banner.icon}
+                              onValueChange={(icon: (typeof banner)["icon"]) =>
+                                updateBanner(index, { icon })
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="grocery">Grocery</SelectItem>
+                                <SelectItem value="food">Food</SelectItem>
+                                <SelectItem value="medicine">Medicine</SelectItem>
+                                <SelectItem value="delivery">Delivery</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Offer badge</Label>
+                          <Input
+                            value={banner.badge}
+                            onChange={(e) => updateBanner(index, { badge: e.target.value })}
+                            placeholder="Fresh deals near you"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label>Button text</Label>
+                            <Input
+                              value={banner.cta_label}
+                              onChange={(e) => updateBanner(index, { cta_label: e.target.value })}
+                              placeholder="Shop now"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Button link</Label>
+                            <Input
+                              value={banner.cta_link}
+                              onChange={(e) => updateBanner(index, { cta_link: e.target.value })}
+                              placeholder="/nearby"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

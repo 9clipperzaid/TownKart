@@ -2,7 +2,17 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowRight, Search, Plus, Minus, ShoppingCart } from "lucide-react";
+import {
+  ArrowRight,
+  Search,
+  Plus,
+  Minus,
+  ShoppingCart,
+  ShoppingBasket,
+  UtensilsCrossed,
+  Pill,
+  Bike,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/format";
@@ -77,6 +87,12 @@ type HomeBanner = {
   title: string;
   subtitle?: string | null;
   image_url?: string | null;
+  type: "template" | "image" | "hybrid";
+  badge?: string | null;
+  cta_label?: string | null;
+  cta_link?: string | null;
+  theme: "emerald" | "sunset" | "midnight" | "berry";
+  icon: "grocery" | "food" | "medicine" | "delivery";
   is_enabled: boolean;
   sort_order: number;
 };
@@ -372,12 +388,30 @@ function HomePage() {
     if (heroBanners.length < 2) return;
     setBannerIndex((current) => (current + direction + heroBanners.length) % heroBanners.length);
   };
+  const activeBanner = heroBanners[bannerIndex];
+  const bannerTheme = {
+    emerald: "from-emerald-700 via-emerald-600 to-green-500",
+    sunset: "from-orange-600 via-amber-500 to-yellow-400",
+    midnight: "from-slate-950 via-slate-800 to-emerald-800",
+    berry: "from-fuchsia-900 via-rose-700 to-orange-500",
+  }[activeBanner?.theme ?? "emerald"];
+  const BannerIcon =
+    activeBanner?.icon === "food"
+      ? UtensilsCrossed
+      : activeBanner?.icon === "medicine"
+        ? Pill
+        : activeBanner?.icon === "delivery"
+          ? Bike
+          : ShoppingBasket;
 
   return (
     <div className="flex flex-col">
       <section className="px-4 pt-4">
         <div
-          className="relative cursor-grab touch-pan-y select-none overflow-hidden rounded-2xl bg-brand-gradient text-primary-foreground shadow-card active:cursor-grabbing"
+          className={cn(
+            "relative cursor-grab touch-pan-y select-none overflow-hidden rounded-2xl bg-gradient-to-br text-white shadow-card active:cursor-grabbing",
+            bannerTheme,
+          )}
           onPointerDown={(event) => {
             bannerPointerRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
             bannerDraggedRef.current = false;
@@ -410,7 +444,7 @@ function HomePage() {
             }
           }}
         >
-          <div className="relative min-h-[260px] p-5">
+          <div className="relative h-[260px] sm:h-[290px] lg:h-[320px]">
             {heroBanners.map((banner, index) => (
               <div
                 key={banner.id}
@@ -419,68 +453,86 @@ function HomePage() {
                   index === bannerIndex ? "opacity-100" : "pointer-events-none opacity-0",
                 )}
               >
-                {banner.image_url && (
+                {banner.image_url && banner.type !== "template" && (
                   <img
                     src={banner.image_url}
                     alt={banner.title}
-                    className="h-full w-full object-cover"
+                    className={cn(
+                      "h-full w-full object-cover",
+                      banner.type === "hybrid" && "opacity-50",
+                    )}
                     loading={index === 0 ? "eager" : "lazy"}
                   />
                 )}
               </div>
             ))}
-            <div className="relative z-10 flex min-h-[220px] flex-col justify-between">
-              {!heroBanners[bannerIndex]?.image_url && (
-                <>
+            {activeBanner?.type !== "image" && (
+              <div className="absolute inset-0 z-10 flex items-center p-5 sm:p-7 lg:p-10">
+                <div className="relative z-10 max-w-[72%] sm:max-w-[62%] lg:max-w-[58%]">
+                  {activeBanner?.badge && (
+                    <span className="inline-flex rounded-full bg-white/18 px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider backdrop-blur sm:text-xs">
+                      {activeBanner.badge}
+                    </span>
+                  )}
+                  <p className="mt-3 text-xs font-bold text-white/85 sm:text-sm">
+                    {activeBanner?.subtitle ?? "Nehtaur's First Online Kart"}
+                  </p>
+                  <h1 className="mt-1.5 text-xl font-extrabold leading-tight sm:text-3xl lg:text-4xl">
+                    {activeBanner?.title}
+                  </h1>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {activeBanner?.cta_label && activeBanner.cta_link && (
+                      <a
+                        href={activeBanner.cta_link}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white px-4 text-xs font-extrabold text-emerald-800 shadow-md transition-transform hover:scale-[1.03] sm:h-10 sm:text-sm"
+                      >
+                        {activeBanner.cta_label}
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                    <CallToOrder className="h-9 border-white/30 bg-white/15 text-white hover:bg-white/25 sm:h-10" />
+                  </div>
+                </div>
+                <div className="absolute -right-4 bottom-2 grid h-36 w-36 place-items-center rounded-full bg-white/14 backdrop-blur-sm sm:right-8 sm:h-48 sm:w-48 lg:right-16 lg:h-56 lg:w-56">
+                  <div className="grid h-[72%] w-[72%] place-items-center rounded-full bg-white/12 shadow-2xl">
+                    <BannerIcon
+                      className="h-16 w-16 text-white drop-shadow-lg sm:h-24 sm:w-24 lg:h-28 lg:w-28"
+                      strokeWidth={1.5}
+                    />
+                  </div>
+                </div>
+                {activeBanner?.id === "default-townkart" && (
                   <img
                     src={townKartHeroWatermark}
                     alt=""
-                    className="pointer-events-none absolute -right-10 top-1/2 hidden w-[70%] max-w-4xl -translate-y-1/2 scale-105 opacity-45 mix-blend-soft-light drop-shadow-[0_28px_60px_rgba(0,0,0,0.35)] md:block"
+                    className="pointer-events-none absolute right-0 hidden h-full opacity-20 mix-blend-soft-light lg:block"
                     aria-hidden="true"
                   />
-                  <div className="relative">
-                    {/* <p className="text-sm font-semibold opacity-90">TownKart quick commerce</p> */}
-                    <p className="mt-2 text-sm font-bold text-white/90">
-                      {heroBanners[bannerIndex]?.subtitle ?? "Nehtaur's First Online Kart"}
-                    </p>
-                    <h1 className="mt-2 max-w-lg text-2xl font-extrabold">
-                      {heroBanners[bannerIndex]?.title}
-                    </h1>
-                    <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                      {["Fresh fruits", "Daily grocery", "Medicines", "Bakery", "Pet supplies"].map(
-                        (offer) => (
-                          <span
-                            key={offer}
-                            className="shrink-0 rounded-full bg-white/18 px-3 py-1.5 text-xs font-bold"
-                          >
-                            {offer}
-                          </span>
-                        ),
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-              {heroBanners[bannerIndex]?.image_url && <div />}
-              <div>
-                <CallToOrder className="mt-4 bg-white text-primary hover:bg-white/90" />
-                {heroBanners.length > 1 && (
-                  <div className="mt-4 flex gap-1.5">
-                    {heroBanners.map((banner, index) => (
-                      <button
-                        key={banner.id}
-                        type="button"
-                        aria-label={`Show banner ${index + 1}`}
-                        onClick={() => setBannerIndex(index)}
-                        className={cn(
-                          "h-1.5 rounded-full bg-white/55 transition-all",
-                          index === bannerIndex ? "w-6 bg-white" : "w-2.5",
-                        )}
-                      />
-                    ))}
-                  </div>
                 )}
               </div>
+            )}
+            {activeBanner?.type === "image" && (
+              <div className="absolute inset-x-0 bottom-0 z-10 flex items-end justify-between bg-gradient-to-t from-black/55 to-transparent p-5 pt-16">
+                <CallToOrder className="bg-white text-primary hover:bg-white/90" />
+              </div>
+            )}
+            <div className="pointer-events-none absolute inset-x-5 bottom-3 z-20">
+              {heroBanners.length > 1 && (
+                <div className="pointer-events-auto flex justify-end gap-1.5">
+                  {heroBanners.map((banner, index) => (
+                    <button
+                      key={banner.id}
+                      type="button"
+                      aria-label={`Show banner ${index + 1}`}
+                      onClick={() => setBannerIndex(index)}
+                      className={cn(
+                        "h-1.5 rounded-full bg-white/55 transition-all",
+                        index === bannerIndex ? "w-6 bg-white" : "w-2.5",
+                      )}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

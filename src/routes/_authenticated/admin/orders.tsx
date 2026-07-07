@@ -59,6 +59,8 @@ type OrderRow = {
   store_name: string;
   status: Status;
   total: number;
+  subtotal: number;
+  delivery_fee: number;
   address: string;
   delivery_latitude: number | null;
   delivery_longitude: number | null;
@@ -483,8 +485,23 @@ function AdminOrdersPage() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 border-t border-border pt-3 text-right font-extrabold">
-                  Total {formatINR(Number(selectedOrder.total))}
+                <div className="mt-3 space-y-2 border-t border-border pt-3 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Products subtotal</span>
+                    <span className="font-semibold">
+                      {formatINR(Number(selectedOrder.subtotal))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Delivery fee</span>
+                    <span className="font-semibold">
+                      {formatINR(Number(selectedOrder.delivery_fee))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 border-t border-border pt-2 text-base font-extrabold">
+                    <span>Total</span>
+                    <span>{formatINR(Number(selectedOrder.total))}</span>
+                  </div>
                 </div>
               </div>
 
