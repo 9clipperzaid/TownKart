@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { userErrorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { compressImageForUpload } from "@/lib/image-compression";
 
 type Bucket =
   | "store-logos"
@@ -26,6 +27,29 @@ export function ImageUpload({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  function storagePathFromPublicUrl(url: string) {
+    try {
+      const path = new URL(url).pathname;
+      const marker = `/storage/v1/object/public/${bucket}/`;
+      const markerIndex = path.indexOf(marker);
+
+      if (markerIndex === -1) return null;
+
+      return decodeURIComponent(path.slice(markerIndex + marker.length));
+    } catch {
+      return null;
+    }
+  }
+
+  async function deleteStoredImage(url: string) {
+    const path = storagePathFromPublicUrl(url);
+    if (!path) return;
+
+    const { error } = await supabase.storage.from(bucket).remove([path]);
+    if (error) throw error;
+  }
 
   async function upload(file: File) {
     if (!file.type.startsWith("image/")) {
@@ -34,16 +58,22 @@ export function ImageUpload({
     }
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const name = `${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from(bucket).upload(name, file, {
+      const previousUrl = value;
+      const compressed = await compressImageForUpload(file);
+      const name = compressed.file.name;
+      const { error } = await supabase.storage.from(bucket).upload(name, compressed.file, {
         cacheControl: "3600",
+        contentType: "image/webp",
         upsert: false,
       });
       if (error) throw error;
       const { data } = supabase.storage.from(bucket).getPublicUrl(name);
       onChange(data.publicUrl);
-      toast.success("Image uploaded");
+      if (previousUrl && previousUrl !== data.publicUrl) {
+        await deleteStoredImage(previousUrl);
+      }
+      const sizeKb = (compressed.compressedBytes / 1024).toFixed(1);
+      toast.success(`Image uploaded as WebP (${sizeKb} KB)`);
     } catch (e) {
       toast.error(userErrorMessage(e, "Upload failed"));
     } finally {
@@ -52,14 +82,29 @@ export function ImageUpload({
     }
   }
 
+  async function removeImage() {
+    if (!value) return;
+
+    setDeleting(true);
+    try {
+      await deleteStoredImage(value);
+      onChange("");
+      toast.success("Image deleted");
+    } catch (e) {
+      toast.error(userErrorMessage(e, "Delete failed"));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium">{label}</span>
         {value && (
-          <Button type="button" size="sm" variant="ghost" onClick={() => onChange("")}>
+          <Button type="button" size="sm" variant="ghost" disabled={deleting} onClick={removeImage}>
             <Trash2 className="h-3.5 w-3.5" />
-            Delete
+            {deleting ? "Deleting..." : "Delete"}
           </Button>
         )}
       </div>
