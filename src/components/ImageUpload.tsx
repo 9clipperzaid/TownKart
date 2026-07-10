@@ -62,7 +62,7 @@ export function ImageUpload({
       const compressed = await compressImageForUpload(file);
       const name = compressed.file.name;
       const { error } = await supabase.storage.from(bucket).upload(name, compressed.file, {
-        cacheControl: "3600",
+        cacheControl: "31536000",
         contentType: "image/webp",
         upsert: false,
       });

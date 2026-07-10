@@ -478,7 +478,7 @@ function HomePage() {
                   index === bannerIndex ? "opacity-100" : "pointer-events-none opacity-0",
                 )}
               >
-                {banner.image_url && banner.type !== "template" && (
+                {index === bannerIndex && banner.image_url && banner.type !== "template" && (
                   <img
                     src={banner.image_url}
                     alt={banner.title}
@@ -486,7 +486,8 @@ function HomePage() {
                       "h-full w-full object-cover",
                       banner.type === "hybrid" && "opacity-50",
                     )}
-                    loading={index === 0 ? "eager" : "lazy"}
+                    loading="eager"
+                    fetchPriority={index === 0 ? "high" : "auto"}
                   />
                 )}
               </div>
