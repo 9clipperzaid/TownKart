@@ -91,12 +91,11 @@ function CustomerShell() {
         }
         clearPendingGooglePhone();
       })
-      .catch(async (error) => {
+      .catch((error) => {
         console.error("[Auth] Failed to sync authenticated profile", error);
-        redirecting = true;
-        clearPendingGooglePhone();
-        await supabase.auth.signOut();
-        window.location.assign("/auth/login?error=account_check_failed");
+        // A temporary profile/API failure must not destroy a valid login session.
+        // Keep the pending phone so synchronization can be retried on the next load.
+        toast.error("Account details could not be refreshed. You are still signed in.");
       })
       .finally(() => {
         queryClient.invalidateQueries({ queryKey: ["profile"] });
