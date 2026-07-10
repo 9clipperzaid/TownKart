@@ -134,6 +134,8 @@ function CategoriesPage() {
                       src={c.image_url}
                       alt=""
                       className="h-10 w-10 shrink-0 rounded-xl object-cover"
+                      loading="lazy"
+                      decoding="async"
                     />
                   ) : (
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-xl">
@@ -218,6 +220,8 @@ function CategoriesPage() {
                           src={c.image_url}
                           alt=""
                           className="h-9 w-9 shrink-0 rounded-lg object-cover"
+                          loading="lazy"
+                          decoding="async"
                         />
                       ) : (
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-xl">

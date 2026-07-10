@@ -142,7 +142,13 @@ function StoreSectionsPage() {
                   <div key={id} className="flex items-center gap-2 rounded-xl border p-2">
                     <div className="h-10 w-10 overflow-hidden rounded-lg bg-secondary">
                       {store.logo_url && (
-                        <img src={store.logo_url} alt="" className="h-full w-full object-cover" />
+                        <img
+                          src={store.logo_url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                        />
                       )}
                     </div>
                     <span className="min-w-0 flex-1 truncate text-sm font-bold">{store.name}</span>

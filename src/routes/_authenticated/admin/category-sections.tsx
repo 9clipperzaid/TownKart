@@ -171,6 +171,8 @@ function CategorySectionsPage() {
                       src={c.image_url}
                       alt=""
                       className="mx-auto h-14 w-14 rounded-xl object-cover"
+                      loading="lazy"
+                      decoding="async"
                     />
                   ) : (
                     <div className="text-xs text-muted-foreground">No image</div>

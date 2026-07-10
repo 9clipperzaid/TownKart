@@ -413,7 +413,13 @@ function ProductRow({ product, actions }: { product: Product; actions: React.Rea
     <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-2">
       <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-secondary">
         {product.image_url && (
-          <img src={product.image_url} alt="" className="h-full w-full object-cover" />
+          <img
+            src={product.image_url}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+          />
         )}
       </div>
       <div className="min-w-0 flex-1">

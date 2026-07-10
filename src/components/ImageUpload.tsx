@@ -127,7 +127,13 @@ export function ImageUpload({
       >
         {value ? (
           <div className="relative w-full">
-            <img src={value} alt={label} className="max-h-40 w-full rounded-lg object-cover" />
+            <img
+              src={value}
+              alt={label}
+              className="max-h-40 w-full rounded-lg object-cover"
+              loading="lazy"
+              decoding="async"
+            />
             <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary">
               <ImagePlus className="h-3.5 w-3.5" />
               Replace image
