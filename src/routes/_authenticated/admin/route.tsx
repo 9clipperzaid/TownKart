@@ -37,6 +37,11 @@ import { setupFcmClient } from "@/lib/firebase";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   beforeLoad: async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session?.user) {
+      throw redirect({ to: "/auth/login", search: { redirectTo: "/admin" } });
+    }
+
     const { data, error } = await supabase
       .from("user_roles")
       .select("role")
