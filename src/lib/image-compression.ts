@@ -1,13 +1,35 @@
-const TARGET_IMAGE_BYTES = 3 * 1024;
-const MIN_IMAGE_DIMENSION = 96;
-const START_IMAGE_DIMENSION = 640;
-const QUALITY_STEPS = [0.55, 0.45, 0.35, 0.25, 0.18, 0.12, 0.08, 0.05];
+// Small images are already web-friendly. Re-encoding them only removes detail.
+export const COMPRESSION_THRESHOLD_BYTES = 300 * 1024;
+// Keeps storage predictable while still allowing high-quality product images.
+export const MAX_UPLOAD_BYTES = 1024 * 1024;
+const TARGET_IMAGE_BYTES = 250 * 1024;
+const MIN_IMAGE_DIMENSION = 640;
+const START_IMAGE_DIMENSION = 1920;
+const QUALITY_STEPS = [0.9, 0.82, 0.74, 0.66];
 
 type CompressedImage = {
   file: File;
   originalBytes: number;
   compressedBytes: number;
+  wasCompressed: boolean;
 };
+
+function originalUploadFile(file: File): CompressedImage {
+  const extension = file.name.match(/\.[a-z0-9]+$/i)?.[0] ?? "";
+  return {
+    file: new File([file], `${crypto.randomUUID()}${extension}`, { type: file.type }),
+    originalBytes: file.size,
+    compressedBytes: file.size,
+    wasCompressed: false,
+  };
+}
+
+function ensureWithinUploadLimit(result: CompressedImage): CompressedImage {
+  if (result.compressedBytes > MAX_UPLOAD_BYTES) {
+    throw new Error("Image is still larger than the 1 MB upload limit after compression");
+  }
+  return result;
+}
 
 function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
   return new Promise<Blob | null>((resolve) => {
@@ -44,6 +66,10 @@ function getOutputSize(width: number, height: number, maxDimension: number) {
 }
 
 export async function compressImageForUpload(file: File): Promise<CompressedImage> {
+  if (file.size <= COMPRESSION_THRESHOLD_BYTES) {
+    return ensureWithinUploadLimit(originalUploadFile(file));
+  }
+
   const source = await loadBitmap(file);
   const sourceWidth = source.width;
   const sourceHeight = source.height;
@@ -77,11 +103,12 @@ export async function compressImageForUpload(file: File): Promise<CompressedImag
       }
 
       if (blob.size <= TARGET_IMAGE_BYTES) {
-        return {
+        return ensureWithinUploadLimit({
           file: new File([blob], `${crypto.randomUUID()}.webp`, { type: "image/webp" }),
           originalBytes: file.size,
           compressedBytes: blob.size,
-        };
+          wasCompressed: true,
+        });
       }
     }
   }
@@ -90,9 +117,14 @@ export async function compressImageForUpload(file: File): Promise<CompressedImag
     throw new Error("Could not compress image");
   }
 
-  return {
+  if (bestBlob.size >= file.size) {
+    return ensureWithinUploadLimit(originalUploadFile(file));
+  }
+
+  return ensureWithinUploadLimit({
     file: new File([bestBlob], `${crypto.randomUUID()}.webp`, { type: "image/webp" }),
     originalBytes: file.size,
     compressedBytes: bestBlob.size,
-  };
+    wasCompressed: true,
+  });
 }

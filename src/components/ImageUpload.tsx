@@ -63,7 +63,7 @@ export function ImageUpload({
       const name = compressed.file.name;
       const { error } = await supabase.storage.from(bucket).upload(name, compressed.file, {
         cacheControl: "31536000",
-        contentType: "image/webp",
+        contentType: compressed.file.type,
         upsert: false,
       });
       if (error) throw error;
@@ -73,7 +73,11 @@ export function ImageUpload({
         await deleteStoredImage(previousUrl);
       }
       const sizeKb = (compressed.compressedBytes / 1024).toFixed(1);
-      toast.success(`Image uploaded as WebP (${sizeKb} KB)`);
+      toast.success(
+        compressed.wasCompressed
+          ? `Large image compressed and uploaded (${sizeKb} KB)`
+          : `Image uploaded in original quality (${sizeKb} KB)`,
+      );
     } catch (e) {
       toast.error(userErrorMessage(e, "Upload failed"));
     } finally {
