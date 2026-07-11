@@ -35,6 +35,7 @@ function cartKey(productId: string, selectedUnit: string) {
 
 export function getUnitOptions(product: {
   price: number;
+  discount_price?: number | null;
   unit?: string | null;
   has_unit_options?: boolean | null;
   unit_options?: UnitOption[] | null;
@@ -53,7 +54,18 @@ export function getUnitOptions(product: {
         description: option.description || null,
       }));
   }
-  return [{ label: product.unit || "1 pc", unitPrice: Number(product.price) }];
+  const regularPrice = Number(product.price);
+  const discountPrice =
+    product.discount_price == null ? null : Number(product.discount_price);
+  const unitPrice =
+    discountPrice != null &&
+    Number.isFinite(discountPrice) &&
+    discountPrice >= 0 &&
+    discountPrice < regularPrice
+      ? discountPrice
+      : regularPrice;
+
+  return [{ label: product.unit || "1 pc", unitPrice }];
 }
 
 export function getLocalCart(): Record<string, LocalCartItem> {

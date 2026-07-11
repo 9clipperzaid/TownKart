@@ -899,7 +899,16 @@ function HomePage() {
                       <p className="text-sm font-semibold text-muted-foreground">
                         {detailProduct.stores?.name ?? "TownKart store"}
                       </p>
-                      <p className="mt-1 text-2xl font-extrabold">{formatINR(unitPrice)}</p>
+                      <div className="mt-1 flex items-baseline gap-2">
+                        <p className="text-2xl font-extrabold">{formatINR(unitPrice)}</p>
+                        {options.length === 1 &&
+                          detailProduct.discount_price != null &&
+                          Number(detailProduct.discount_price) < Number(detailProduct.price) && (
+                            <p className="text-sm font-semibold text-muted-foreground line-through">
+                              {formatINR(Number(detailProduct.price))}
+                            </p>
+                          )}
+                      </div>
                     </div>
 
                     {options.length > 1 && (
