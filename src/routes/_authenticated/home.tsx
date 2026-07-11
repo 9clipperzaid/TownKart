@@ -45,7 +45,10 @@ type ProductSearchRow = {
   is_popular: boolean;
   popular_sort_order: number;
   has_unit_options: boolean;
-  unit_options: { label: string; unitPrice: number }[] | null;
+  unit_options:
+    | { label: string; unitPrice: number; imageUrl?: string | null; description?: string | null }[]
+    | null;
+  preferredUnit?: string;
   stores: { name: string } | null;
 };
 
@@ -242,13 +245,17 @@ function HomePage() {
         .is("deleted_at", null)
         .limit(300);
       if (error) throw error;
-      return (data as ProductSearchRow[]).filter(
+      const matches = (data as ProductSearchRow[]).filter(
         (product) =>
           product.name.toLowerCase().includes(query) ||
           (product.description ?? "").toLowerCase().includes(query) ||
           (product.category ?? "").toLowerCase().includes(query) ||
           (product.stores?.name ?? "").toLowerCase().includes(query),
       );
+      return matches.flatMap((product) => {
+        const options = getUnitOptions(product);
+        return options.map((option) => ({ ...product, preferredUnit: option.label }));
+      });
     },
   });
 
@@ -739,16 +746,32 @@ function HomePage() {
                   )
                   .map((product) => (
                     <div
-                      key={product.id}
-                      onClick={() => setDetailProduct(product)}
+                      key={`${product.id}::${product.preferredUnit ?? "default"}`}
+                      onClick={() => {
+                        if (product.preferredUnit) {
+                          setSelectedUnits((current) => ({
+                            ...current,
+                            [product.id]: product.preferredUnit!,
+                          }));
+                        }
+                        setDetailProduct(product);
+                      }}
                       className={cn(
                         "min-w-0 rounded-xl border border-border/70 bg-card p-1.5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-pop sm:p-2",
                         section.layout_mode === "horizontal" && "w-36 shrink-0 snap-start sm:w-40",
                       )}
                     >
-                      {product.image_url ? (
+                      {getUnitOptions(product).find(
+                        (option) => option.label === product.preferredUnit,
+                      )?.imageUrl || product.image_url ? (
                         <img
-                          src={product.image_url}
+                          src={
+                            getUnitOptions(product).find(
+                              (option) => option.label === product.preferredUnit,
+                            )?.imageUrl ||
+                            product.image_url ||
+                            ""
+                          }
                           alt={product.name}
                           className="aspect-square w-full rounded-lg object-cover"
                           loading="lazy"
@@ -760,7 +783,7 @@ function HomePage() {
                         </div>
                       )}
                       <p className="mt-1.5 text-[10px] font-medium text-muted-foreground">
-                        {product.unit}
+                        {product.preferredUnit ?? product.unit}
                       </p>
                       <h3 className="line-clamp-2 min-h-8 text-xs font-semibold leading-tight">
                         {product.name}
@@ -769,17 +792,35 @@ function HomePage() {
                         {product.stores?.name ?? "TownKart store"}
                       </p>
                       <div className="mt-1 flex items-center justify-between gap-1">
-                        <p className="text-xs font-extrabold">{formatINR(Number(product.price))}</p>
+                        <p className="text-xs font-extrabold">
+                          {formatINR(
+                            Number(
+                              getUnitOptions(product).find(
+                                (option) => option.label === product.preferredUnit,
+                              )?.unitPrice ?? product.price,
+                            ),
+                          )}
+                        </p>
                         <button
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
-                            addProductToCart(product);
+                            const option =
+                              getUnitOptions(product).find(
+                                (item) => item.label === product.preferredUnit,
+                              ) ?? getUnitOptions(product)[0];
+                            const quantity = cart[`${product.id}::${option.label}`] ?? 0;
+                            setQty.mutate({
+                              product,
+                              selectedUnit: option.label,
+                              unitPrice: option.unitPrice,
+                              quantity: quantity + 1,
+                            });
                           }}
                           className="rounded-md border border-primary px-2 py-1 text-[10px] font-extrabold text-primary hover:bg-primary hover:text-primary-foreground"
                         >
                           {(cart[
-                            `${product.id}::${getUnitOptions(product)[0]?.label ?? product.unit}`
+                            `${product.id}::${product.preferredUnit ?? getUnitOptions(product)[0]?.label ?? product.unit}`
                           ] ?? 0) > 0
                             ? `Add +`
                             : "Add"}
@@ -825,7 +866,11 @@ function HomePage() {
           {detailProduct &&
             (() => {
               const options = getUnitOptions(detailProduct);
-              const selectedUnit = selectedUnits[detailProduct.id] ?? options[0]?.label ?? "";
+              const selectedUnit =
+                selectedUnits[detailProduct.id] ??
+                detailProduct.preferredUnit ??
+                options[0]?.label ??
+                "";
               const selectedOption =
                 options.find((option) => option.label === selectedUnit) ?? options[0];
               const unitPrice = Number(selectedOption?.unitPrice ?? detailProduct.price);
@@ -836,9 +881,9 @@ function HomePage() {
                     <DialogTitle>{detailProduct.name}</DialogTitle>
                   </DialogHeader>
 
-                  {detailProduct.image_url ? (
+                  {selectedOption?.imageUrl || detailProduct.image_url ? (
                     <img
-                      src={detailProduct.image_url}
+                      src={selectedOption?.imageUrl || detailProduct.image_url || ""}
                       alt={detailProduct.name}
                       className="aspect-video w-full rounded-xl object-cover"
                     />
@@ -887,7 +932,9 @@ function HomePage() {
                     )}
 
                     <p className="whitespace-pre-line text-sm leading-6 text-muted-foreground">
-                      {detailProduct.description || "No description added yet."}
+                      {selectedOption?.description ||
+                        detailProduct.description ||
+                        "No description added yet."}
                     </p>
 
                     <div className="flex flex-col gap-2 sm:flex-row">

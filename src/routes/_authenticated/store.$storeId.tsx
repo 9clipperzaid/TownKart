@@ -25,7 +25,9 @@ type Product = {
   price: number;
   unit: string;
   has_unit_options: boolean;
-  unit_options: { label: string; unitPrice: number }[] | null;
+  unit_options:
+    | { label: string; unitPrice: number; imageUrl?: string | null; description?: string | null }[]
+    | null;
   is_available: boolean;
 };
 
@@ -303,9 +305,9 @@ function StorePage() {
                   )}
                 >
                   <div className="relative mb-3">
-                    {p.image_url ? (
+                    {selectedOption?.imageUrl || p.image_url ? (
                       <img
-                        src={p.image_url}
+                        src={selectedOption?.imageUrl || p.image_url || ""}
                         alt={p.name}
                         className="aspect-square w-full rounded-md object-cover"
                         loading="lazy"
@@ -460,9 +462,9 @@ function StorePage() {
                   <DialogHeader>
                     <DialogTitle>{detailProduct.name}</DialogTitle>
                   </DialogHeader>
-                  {detailProduct.image_url ? (
+                  {selectedOption?.imageUrl || detailProduct.image_url ? (
                     <img
-                      src={detailProduct.image_url}
+                      src={selectedOption?.imageUrl || detailProduct.image_url || ""}
                       alt={detailProduct.name}
                       className="aspect-video w-full rounded-xl object-cover"
                     />
@@ -507,7 +509,9 @@ function StorePage() {
                     )}
 
                     <p className="whitespace-pre-line text-sm leading-6 text-muted-foreground">
-                      {detailProduct.description || "No description added yet."}
+                      {selectedOption?.description ||
+                        detailProduct.description ||
+                        "No description added yet."}
                     </p>
 
                     {soldOut ? (

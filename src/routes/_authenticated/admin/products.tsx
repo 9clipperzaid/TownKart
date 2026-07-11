@@ -78,7 +78,12 @@ type ProductRow = {
   is_popular: boolean;
   popular_sort_order: number;
   has_unit_options: boolean;
-  unit_options: { label: string; unitPrice: number }[];
+  unit_options: {
+    label: string;
+    unitPrice: number;
+    imageUrl?: string | null;
+    description?: string | null;
+  }[];
   price_updated_at: string;
   deleted_at: string | null;
   deletion_batch_id: string | null;
@@ -104,7 +109,12 @@ type FormState = {
   is_popular: boolean;
   popular_sort_order: number;
   has_unit_options: boolean;
-  unit_options: { label: string; unitPrice: number }[];
+  unit_options: {
+    label: string;
+    unitPrice: number;
+    imageUrl?: string | null;
+    description?: string | null;
+  }[];
 };
 
 type BulkImportProduct = {
@@ -123,7 +133,12 @@ type BulkImportProduct = {
   is_popular: boolean;
   popular_sort_order: number;
   has_unit_options: boolean;
-  unit_options: { label: string; unitPrice: number }[];
+  unit_options: {
+    label: string;
+    unitPrice: number;
+    imageUrl?: string | null;
+    description?: string | null;
+  }[];
 };
 
 function emptyForm(storeId: string): FormState {
@@ -257,6 +272,8 @@ function ProductsPage() {
                 .map((option) => ({
                   label: option.label.trim(),
                   unitPrice: Number(option.unitPrice),
+                  imageUrl: option.imageUrl || null,
+                  description: option.description?.trim() || null,
                 }))
             : [],
         },
@@ -1099,41 +1116,63 @@ function ProductsPage() {
                 {form.has_unit_options && (
                   <div className="space-y-2">
                     {form.unit_options.map((option, index) => (
-                      <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2">
-                        <Input
-                          value={option.label}
-                          placeholder="0.5 kg"
+                      <div key={index} className="space-y-3 rounded-xl border border-border/60 p-3">
+                        <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                          <Input
+                            value={option.label}
+                            placeholder="0.5 kg"
+                            onChange={(event) => {
+                              const next = [...form.unit_options];
+                              next[index] = { ...option, label: event.target.value };
+                              setForm({ ...form, unit_options: next });
+                            }}
+                          />
+                          <Input
+                            type="number"
+                            value={option.unitPrice}
+                            placeholder="Price"
+                            onChange={(event) => {
+                              const next = [...form.unit_options];
+                              next[index] = { ...option, unitPrice: Number(event.target.value) };
+                              setForm({ ...form, unit_options: next });
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              setForm({
+                                ...form,
+                                unit_options: form.unit_options.filter(
+                                  (_, current) => current !== index,
+                                ),
+                              })
+                            }
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                        <Textarea
+                          value={option.description ?? ""}
+                          placeholder="Description for this unit (optional)"
+                          rows={2}
                           onChange={(event) => {
                             const next = [...form.unit_options];
-                            next[index] = { ...option, label: event.target.value };
+                            next[index] = { ...option, description: event.target.value };
                             setForm({ ...form, unit_options: next });
                           }}
                         />
-                        <Input
-                          type="number"
-                          value={option.unitPrice}
-                          placeholder="Price"
-                          onChange={(event) => {
+                        <ImageUpload
+                          label={`Photo for ${option.label || `unit ${index + 1}`} (optional)`}
+                          bucket="product-images"
+                          value={option.imageUrl ?? ""}
+                          onChange={(imageUrl) => {
                             const next = [...form.unit_options];
-                            next[index] = { ...option, unitPrice: Number(event.target.value) };
+                            next[index] = { ...option, imageUrl };
                             setForm({ ...form, unit_options: next });
                           }}
                         />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() =>
-                            setForm({
-                              ...form,
-                              unit_options: form.unit_options.filter(
-                                (_, current) => current !== index,
-                              ),
-                            })
-                          }
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
                       </div>
                     ))}
                     <Button

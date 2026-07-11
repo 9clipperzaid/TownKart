@@ -23,7 +23,9 @@ type Product = {
   discount_price: number | null;
   unit: string;
   has_unit_options: boolean;
-  unit_options: { label: string; unitPrice: number }[] | null;
+  unit_options:
+    | { label: string; unitPrice: number; imageUrl?: string | null; description?: string | null }[]
+    | null;
   stores: { name: string } | null;
 };
 
@@ -152,9 +154,9 @@ function ProductDetailPage() {
 
       <div className="grid gap-7 rounded-3xl border bg-card p-4 shadow-card sm:grid-cols-2 sm:p-7">
         <div className="overflow-hidden rounded-2xl bg-secondary/50">
-          {product.image_url ? (
+          {selectedOption?.imageUrl || product.image_url ? (
             <img
-              src={product.image_url}
+              src={selectedOption?.imageUrl || product.image_url || ""}
               alt={product.name}
               className="aspect-square h-full w-full object-cover"
             />
@@ -210,7 +212,9 @@ function ProductDetailPage() {
           <div className="mt-6 border-t pt-5">
             <h2 className="font-bold">Product description</h2>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-              {product.description?.trim() || "No description has been added for this product yet."}
+              {selectedOption?.description?.trim() ||
+                product.description?.trim() ||
+                "No description has been added for this product yet."}
             </p>
           </div>
 

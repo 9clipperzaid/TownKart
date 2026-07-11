@@ -15,6 +15,8 @@ export type LocalCartItem = {
 export type UnitOption = {
   label: string;
   unitPrice: number;
+  imageUrl?: string | null;
+  description?: string | null;
 };
 
 const CART_KEY = "townkart_local_cart";
@@ -44,7 +46,12 @@ export function getUnitOptions(product: {
   ) {
     return product.unit_options
       .filter((option) => option.label && Number.isFinite(Number(option.unitPrice)))
-      .map((option) => ({ label: option.label, unitPrice: Number(option.unitPrice) }));
+      .map((option) => ({
+        label: option.label,
+        unitPrice: Number(option.unitPrice),
+        imageUrl: option.imageUrl || null,
+        description: option.description || null,
+      }));
   }
   return [{ label: product.unit || "1 pc", unitPrice: Number(product.price) }];
 }
