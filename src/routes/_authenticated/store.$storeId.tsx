@@ -23,6 +23,7 @@ type Product = {
   description: string | null;
   image_url: string | null;
   price: number;
+  discount_price: number | null;
   unit: string;
   has_unit_options: boolean;
   unit_options:
@@ -454,6 +455,10 @@ function StorePage() {
               const selectedOption =
                 unitOptions.find((option) => option.label === selectedUnit) ?? unitOptions[0];
               const unitPrice = Number(selectedOption?.unitPrice ?? detailProduct.price);
+              const hasDiscount =
+                unitOptions.length === 1 &&
+                detailProduct.discount_price != null &&
+                Number(detailProduct.discount_price) < Number(detailProduct.price);
               const qty = cart[`${detailProduct.id}::${selectedUnit}`] ?? 0;
               const soldOut = !detailProduct.is_available;
 
@@ -476,7 +481,17 @@ function StorePage() {
                   <div className="space-y-4">
                     <div>
                       <p className="text-sm font-semibold text-muted-foreground">{selectedUnit}</p>
-                      <p className="text-xl font-extrabold">{formatINR(unitPrice)}</p>
+                      {hasDiscount && (
+                        <p className="mt-1 text-xs font-bold text-primary">Discount price</p>
+                      )}
+                      <div className="flex items-baseline gap-2">
+                        <p className="text-xl font-extrabold">{formatINR(unitPrice)}</p>
+                        {hasDiscount && (
+                          <p className="text-sm font-semibold text-muted-foreground line-through">
+                            {formatINR(Number(detailProduct.price))}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     {unitOptions.length > 1 && (
