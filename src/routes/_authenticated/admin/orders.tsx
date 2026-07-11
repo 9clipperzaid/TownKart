@@ -13,6 +13,7 @@ import {
   MapPin,
   Navigation,
   Download,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { adminGetOrderDetail, adminListOrdersReport } from "@/lib/admin.functions";
@@ -88,6 +89,7 @@ function AdminOrdersPage() {
   const [selectedId, setSelectedId] = useState<string | null>(searchParams.orderId ?? null);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [openStatuses, setOpenStatuses] = useState<Set<Status>>(() => new Set(["pending"]));
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["operational-orders", fromDate, toDate],
@@ -286,102 +288,131 @@ function AdminOrdersPage() {
         <div className="grid gap-4 xl:grid-cols-3 2xl:grid-cols-6">
           {grouped.map((group) => {
             const Icon = group.icon;
+            const isOpen = group.key === "pending" || openStatuses.has(group.key);
             return (
               <section
                 key={group.key}
-                className="min-h-64 rounded-2xl border border-border/60 bg-card p-3 shadow-card"
+                className={`rounded-2xl border border-border/60 bg-card p-3 shadow-card ${
+                  isOpen ? "min-h-64" : ""
+                }`}
               >
-                <div className="mb-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  className={`flex w-full items-center justify-between gap-3 text-left ${
+                    isOpen ? "mb-3" : ""
+                  }`}
+                  aria-expanded={isOpen}
+                  onClick={() => {
+                    if (group.key === "pending") return;
+                    setOpenStatuses((current) => {
+                      const next = new Set(current);
+                      if (next.has(group.key)) next.delete(group.key);
+                      else next.add(group.key);
+                      return next;
+                    });
+                  }}
+                >
                   <h2 className="flex items-center gap-2 text-sm font-bold">
                     <Icon className="h-4 w-4 text-primary" />
                     {group.label}
                   </h2>
-                  <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-bold">
-                    {group.orders.length}
+                  <span className="flex items-center gap-2">
+                    <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-bold">
+                      {group.orders.length}
+                    </span>
+                    {group.key !== "pending" && (
+                      <ChevronDown
+                        className={`h-4 w-4 text-muted-foreground transition-transform ${
+                          isOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    )}
                   </span>
-                </div>
+                </button>
 
-                <div className="space-y-2.5">
-                  {group.orders.map((order) => (
-                    <article
-                      key={order.id}
-                      onClick={() => setSelectedId(order.id)}
-                      className="cursor-pointer rounded-xl border border-border/50 bg-background p-3 transition hover:-translate-y-0.5 hover:shadow-card"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <h3 className="truncate text-sm font-bold">{order.store_name}</h3>
-                          <p className="text-xs text-muted-foreground">
-                            {order.tracking_code ?? order.id.slice(0, 8)}
-                          </p>
+                {isOpen && (
+                  <div className="space-y-2.5">
+                    {group.orders.map((order) => (
+                      <article
+                        key={order.id}
+                        onClick={() => setSelectedId(order.id)}
+                        className="cursor-pointer rounded-xl border border-border/50 bg-background p-3 transition hover:-translate-y-0.5 hover:shadow-card"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-sm font-bold">{order.store_name}</h3>
+                            <p className="text-xs text-muted-foreground">
+                              {order.tracking_code ?? order.id.slice(0, 8)}
+                            </p>
+                          </div>
+                          <span className="shrink-0 text-sm font-extrabold">
+                            {formatINR(order.total)}
+                          </span>
                         </div>
-                        <span className="shrink-0 text-sm font-extrabold">
-                          {formatINR(order.total)}
-                        </span>
-                      </div>
-                      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
-                        {order.order_items
-                          ?.map((item) => `${item.quantity}x ${item.name}`)
-                          .join(", ")}
-                      </p>
-                      <p className="mt-2 line-clamp-1 text-xs text-muted-foreground">
-                        {order.address}
-                      </p>
-                      {order.delivery_latitude != null && order.delivery_longitude != null && (
-                        <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-primary">
-                          <MapPin className="h-3 w-3" />
-                          Pin selected
+                        <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                          {order.order_items
+                            ?.map((item) => `${item.quantity}x ${item.name}`)
+                            .join(", ")}
                         </p>
-                      )}
+                        <p className="mt-2 line-clamp-1 text-xs text-muted-foreground">
+                          {order.address}
+                        </p>
+                        {order.delivery_latitude != null && order.delivery_longitude != null && (
+                          <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-primary">
+                            <MapPin className="h-3 w-3" />
+                            Pin selected
+                          </p>
+                        )}
 
-                      <div className="mt-3 flex items-center gap-2">
-                        <Select
-                          value={order.status}
-                          onValueChange={(status) =>
-                            mut.mutate({ orderId: order.id, status: status as Status })
-                          }
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {STATUSES.map((s) => (
-                              <SelectItem key={s.key} value={s.key}>
-                                {s.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {order.status === "pending" && (
+                        <div className="mt-3 flex items-center gap-2">
+                          <Select
+                            value={order.status}
+                            onValueChange={(status) =>
+                              mut.mutate({ orderId: order.id, status: status as Status })
+                            }
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STATUSES.map((s) => (
+                                <SelectItem key={s.key} value={s.key}>
+                                  {s.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {order.status === "pending" && (
+                            <Button
+                              size="sm"
+                              className="h-8"
+                              onClick={() => mut.mutate({ orderId: order.id, status: "accepted" })}
+                            >
+                              Accept
+                            </Button>
+                          )}
                           <Button
                             size="sm"
+                            variant="outline"
                             className="h-8"
-                            onClick={() => mut.mutate({ orderId: order.id, status: "accepted" })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedId(order.id);
+                            }}
                           >
-                            Accept
+                            <Eye className="h-3.5 w-3.5" />
+                            View
                           </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedId(order.id);
-                          }}
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                          View
-                        </Button>
-                      </div>
-                    </article>
-                  ))}
-                  {group.orders.length === 0 && (
-                    <p className="rounded-xl bg-muted/50 px-3 py-8 text-center text-xs text-muted-foreground">
-                      No orders
-                    </p>
-                  )}
-                </div>
+                        </div>
+                      </article>
+                    ))}
+                    {group.orders.length === 0 && (
+                      <p className="rounded-xl bg-muted/50 px-3 py-8 text-center text-xs text-muted-foreground">
+                        No orders
+                      </p>
+                    )}
+                  </div>
+                )}
               </section>
             );
           })}

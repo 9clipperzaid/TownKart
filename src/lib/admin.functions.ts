@@ -736,6 +736,8 @@ const productSchema = z.object({
       z.object({
         label: z.string().trim().min(1).max(40),
         unitPrice: z.number().min(0).max(1000000),
+        imageUrl: z.string().trim().url().max(2000).optional().nullable(),
+        description: z.string().trim().max(500).optional().nullable(),
       }),
     )
     .max(12)
