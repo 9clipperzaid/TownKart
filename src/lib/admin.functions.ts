@@ -857,6 +857,66 @@ export const adminBulkAssignProductCategory = createServerFn({ method: "POST" })
     return { updated: data.product_ids.length };
   });
 
+export const adminBulkUpdateProductInventory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) =>
+    z
+      .object({
+        product_ids: z.array(z.string().uuid()).min(1).max(500),
+        action: z.enum(["increase_stock", "activate", "deactivate", "out_of_stock"]),
+        quantity: z.number().int().min(1).max(1000000).optional(),
+      })
+      .superRefine((data, ctx) => {
+        if (data.action === "increase_stock" && data.quantity === undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["quantity"],
+            message: "Enter the stock quantity to add.",
+          });
+        }
+      })
+      .parse(value),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { data: products, error: readError } = await db
+      .from("products")
+      .select("id, stock_quantity")
+      .in("id", data.product_ids)
+      .is("deleted_at", null);
+    if (readError) throw new Error(readError.message);
+    if (!products?.length) throw new Error("No active products were found.");
+
+    const updates = products.map((product: { id: string; stock_quantity: number | null }) => {
+      if (data.action === "increase_stock") {
+        return {
+          id: product.id,
+          stock_quantity: Math.min(1000000, Number(product.stock_quantity ?? 0) + data.quantity!),
+        };
+      }
+      if (data.action === "activate") {
+        return { id: product.id, status: "active", is_available: true };
+      }
+      if (data.action === "deactivate") {
+        return { id: product.id, status: "inactive", is_available: false };
+      }
+      return { id: product.id, stock_quantity: 0, is_available: false };
+    });
+
+    for (const update of updates) {
+      const { id, ...payload } = update;
+      const { error } = await db.from("products").update(payload).eq("id", id);
+      if (error) throw new Error(error.message);
+    }
+
+    await logAction(context.userId, `bulk_${data.action}`, "product", null, {
+      product_count: updates.length,
+      quantity: data.quantity ?? null,
+    });
+    return { updated: updates.length };
+  });
+
 export const adminBulkDeleteProducts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((value: unknown) =>

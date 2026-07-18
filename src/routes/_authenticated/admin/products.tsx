@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import {
   adminBulkAssignProductCategory,
+  adminBulkUpdateProductInventory,
   adminBulkDeleteProducts,
   adminBulkImportProducts,
   adminListStores,
@@ -174,6 +175,7 @@ function ProductsPage() {
   const save = useServerFn(adminSaveProduct);
   const bulkImport = useServerFn(adminBulkImportProducts);
   const bulkAssignCategory = useServerFn(adminBulkAssignProductCategory);
+  const bulkUpdateInventory = useServerFn(adminBulkUpdateProductInventory);
   const bulkDelete = useServerFn(adminBulkDeleteProducts);
   const undoDelete = useServerFn(adminUndoProductDelete);
   const restoreProducts = useServerFn(adminRestoreProducts);
@@ -193,6 +195,7 @@ function ProductsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkCategory, setBulkCategory] = useState("");
   const [bulkSubcategory, setBulkSubcategory] = useState("");
+  const [bulkStockQuantity, setBulkStockQuantity] = useState("");
   const [trashOpen, setTrashOpen] = useState(false);
 
   const { data: stores = [] } = useQuery({
@@ -332,6 +335,29 @@ function ProductsPage() {
       setSelectedIds([]);
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, "Could not delete products")),
+  });
+
+  const bulkInventoryMut = useMutation({
+    mutationFn: (action: "increase_stock" | "activate" | "deactivate" | "out_of_stock") =>
+      bulkUpdateInventory({
+        data: {
+          product_ids: selectedIds,
+          action,
+          quantity: action === "increase_stock" ? Number(bulkStockQuantity) : undefined,
+        },
+      }),
+    onSuccess: (result, action) => {
+      const messages = {
+        increase_stock: `Stock increased for ${result.updated} products`,
+        activate: `${result.updated} products activated`,
+        deactivate: `${result.updated} products deactivated`,
+        out_of_stock: `${result.updated} products marked out of stock`,
+      };
+      toast.success(messages[action]);
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
+      setBulkStockQuantity("");
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "Could not update products")),
   });
 
   const undoDeleteMut = useMutation({
@@ -606,57 +632,117 @@ function ProductsPage() {
             </div>
           </div>
           {selectedIds.length > 0 && (
-            <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end">
-              <div className="space-y-1 lg:w-56">
-                <Label>Category</Label>
-                <Select
-                  value={bulkCategory}
-                  onValueChange={(value) => {
-                    setBulkCategory(value);
-                    setBulkSubcategory("");
-                  }}
+            <div className="mt-4 space-y-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+                <div className="space-y-1 lg:w-56">
+                  <Label>Category</Label>
+                  <Select
+                    value={bulkCategory}
+                    onValueChange={(value) => {
+                      setBulkCategory(value);
+                      setBulkSubcategory("");
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((category) => (
+                        <SelectItem key={category.id} value={category.key}>
+                          {category.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1 lg:w-64">
+                  <Label>Subcategory (optional)</Label>
+                  <Select
+                    value={bulkSubcategory || "none"}
+                    onValueChange={(value) => setBulkSubcategory(value === "none" ? "" : value)}
+                    disabled={!bulkCategory}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose subcategory" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {bulkSubcategories.map((subcategory) => (
+                        <SelectItem key={subcategory.id} value={subcategory.id}>
+                          {subcategory.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  disabled={!bulkCategory || bulkCategoryMut.isPending}
+                  onClick={() => bulkCategoryMut.mutate()}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.key}>
-                        {category.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  Apply to {selectedIds.length} products
+                </Button>
+                <Button variant="ghost" onClick={() => setSelectedIds([])}>
+                  Clear
+                </Button>
               </div>
-              <div className="space-y-1 lg:w-64">
-                <Label>Subcategory (optional)</Label>
-                <Select
-                  value={bulkSubcategory || "none"}
-                  onValueChange={(value) => setBulkSubcategory(value === "none" ? "" : value)}
-                  disabled={!bulkCategory}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose subcategory" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {bulkSubcategories.map((subcategory) => (
-                      <SelectItem key={subcategory.id} value={subcategory.id}>
-                        {subcategory.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="border-t border-primary/20 pt-4">
+                <Label>Bulk inventory & status</Label>
+                <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      min="1"
+                      max="1000000"
+                      step="1"
+                      inputMode="numeric"
+                      value={bulkStockQuantity}
+                      onChange={(event) => setBulkStockQuantity(event.target.value)}
+                      placeholder="Stock to add"
+                      aria-label="Stock quantity to add to each selected product"
+                      className="w-36 bg-background"
+                    />
+                    <Button
+                      variant="outline"
+                      disabled={
+                        bulkInventoryMut.isPending ||
+                        !Number.isInteger(Number(bulkStockQuantity)) ||
+                        Number(bulkStockQuantity) < 1
+                      }
+                      onClick={() => bulkInventoryMut.mutate("increase_stock")}
+                    >
+                      Increase stock
+                    </Button>
+                  </div>
+                  <Button
+                    variant="outline"
+                    disabled={bulkInventoryMut.isPending}
+                    onClick={() => bulkInventoryMut.mutate("activate")}
+                  >
+                    Set Active
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={bulkInventoryMut.isPending}
+                    onClick={() => bulkInventoryMut.mutate("deactivate")}
+                  >
+                    Set Inactive
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    disabled={bulkInventoryMut.isPending}
+                    onClick={() => {
+                      if (confirm(`Set stock to 0 for ${selectedIds.length} selected products?`)) {
+                        bulkInventoryMut.mutate("out_of_stock");
+                      }
+                    }}
+                  >
+                    Mark Out of Stock
+                  </Button>
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Stock quantity is added to each selected product.
+                </p>
               </div>
-              <Button
-                disabled={!bulkCategory || bulkCategoryMut.isPending}
-                onClick={() => bulkCategoryMut.mutate()}
-              >
-                Apply to {selectedIds.length} products
-              </Button>
-              <Button variant="ghost" onClick={() => setSelectedIds([])}>
-                Clear
-              </Button>
             </div>
           )}
         </div>
