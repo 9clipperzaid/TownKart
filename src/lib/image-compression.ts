@@ -1,11 +1,10 @@
-// Small images are already web-friendly. Re-encoding them only removes detail.
-export const COMPRESSION_THRESHOLD_BYTES = 300 * 1024;
-// Keeps storage predictable while still allowing high-quality product images.
-export const MAX_UPLOAD_BYTES = 1024 * 1024;
-const TARGET_IMAGE_BYTES = 250 * 1024;
-const MIN_IMAGE_DIMENSION = 640;
+// Images already within the upload limit keep their original quality and format.
+export const MAX_UPLOAD_BYTES = 30 * 1024;
+export const COMPRESSION_THRESHOLD_BYTES = MAX_UPLOAD_BYTES;
+const TARGET_IMAGE_BYTES = MAX_UPLOAD_BYTES;
+const MIN_IMAGE_DIMENSION = 160;
 const START_IMAGE_DIMENSION = 1920;
-const QUALITY_STEPS = [0.9, 0.82, 0.74, 0.66];
+const QUALITY_STEPS = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2];
 
 type CompressedImage = {
   file: File;
@@ -26,7 +25,7 @@ function originalUploadFile(file: File): CompressedImage {
 
 function ensureWithinUploadLimit(result: CompressedImage): CompressedImage {
   if (result.compressedBytes > MAX_UPLOAD_BYTES) {
-    throw new Error("Image is still larger than the 1 MB upload limit after compression");
+    throw new Error("Image is still larger than the 30 KB upload limit after compression");
   }
   return result;
 }

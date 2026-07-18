@@ -882,11 +882,13 @@ function HomePage() {
                   </DialogHeader>
 
                   {selectedOption?.imageUrl || detailProduct.image_url ? (
-                    <img
-                      src={selectedOption?.imageUrl || detailProduct.image_url || ""}
-                      alt={detailProduct.name}
-                      className="aspect-video w-full rounded-xl object-cover"
-                    />
+                    <div className="flex max-h-[45vh] min-h-48 w-full items-center justify-center overflow-hidden rounded-xl bg-secondary/40">
+                      <img
+                        src={selectedOption?.imageUrl || detailProduct.image_url || ""}
+                        alt={detailProduct.name}
+                        className="max-h-[45vh] h-auto w-auto max-w-full object-contain"
+                      />
+                    </div>
                   ) : (
                     <div className="flex aspect-video w-full items-center justify-center rounded-xl bg-secondary text-5xl font-extrabold text-primary">
                       {categories.find((category) => category.key === detailProduct.category)
