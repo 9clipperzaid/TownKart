@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { ArrowLeft, Star, Clock, Plus, Minus, ShoppingCart, Search, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +13,7 @@ import { cn, userErrorMessage } from "@/lib/utils";
 import { CallToOrder } from "@/components/CallToOrder";
 import { getLocalCart, getUnitOptions, updateLocalCartItem } from "@/lib/local-cart";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { getStoreProductSections } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/store/$storeId")({
   component: StorePage,
@@ -32,6 +34,13 @@ type Product = {
   is_available: boolean;
 };
 
+type StoreProductSection = {
+  id: string;
+  title: string;
+  display_order: number;
+  product_ids: string[];
+};
+
 const TILE_GRADIENTS = [
   "from-primary/20 to-primary/5",
   "from-success/20 to-success/5",
@@ -47,6 +56,7 @@ function StorePage() {
   const [availableOnly, setAvailableOnly] = useState(false);
   const [selectedUnits, setSelectedUnits] = useState<Record<string, string>>({});
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+  const listStoreProductSections = useServerFn(getStoreProductSections);
 
   const { data: store } = useQuery({
     queryKey: ["store", storeId],
@@ -72,6 +82,12 @@ function StorePage() {
       if (error) throw error;
       return data as Product[];
     },
+  });
+
+  const { data: storeProductSections = [] } = useQuery({
+    queryKey: ["store-product-sections", storeId],
+    queryFn: () =>
+      listStoreProductSections({ data: { storeId } }) as Promise<StoreProductSection[]>,
   });
 
   const { data: cart = {} } = useQuery({
@@ -170,6 +186,36 @@ function StorePage() {
       return p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q);
     });
   }, [products, search, availableOnly]);
+
+  const productGroups = useMemo(() => {
+    if (search.trim() || !storeProductSections.length) {
+      return [
+        {
+          id: undefined as string | undefined,
+          title: search.trim() ? "Search results" : "All products",
+          products: filtered,
+        },
+      ];
+    }
+
+    const productMap = new Map(filtered.map((product) => [product.id, product]));
+    const used = new Set<string>();
+    const groups: { id?: string; title: string; products: Product[] }[] = [];
+
+    storeProductSections.forEach((section) => {
+      const sectionProducts = section.product_ids
+        .map((id) => productMap.get(id))
+        .filter((product): product is Product => !!product && !used.has(product.id));
+      sectionProducts.forEach((product) => used.add(product.id));
+      if (sectionProducts.length) {
+        groups.push({ id: section.id, title: section.title, products: sectionProducts });
+      }
+    });
+
+    const remaining = filtered.filter((product) => !used.has(product.id));
+    if (remaining.length) groups.push({ title: "All other products", products: remaining });
+    return groups;
+  }, [filtered, search, storeProductSections]);
 
   const availableCount = products.filter((p) => p.is_available).length;
   const cartTotal = Object.values(cart).reduce((a, b) => a + b, 0);
@@ -281,150 +327,179 @@ function StorePage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-9">
-            {filtered.map((p, idx) => {
-              const unitOptions = getUnitOptions(p);
-              const selectedUnit = selectedUnits[p.id] ?? unitOptions[0]?.label ?? p.unit;
-              const selectedOption =
-                unitOptions.find((option) => option.label === selectedUnit) ?? unitOptions[0];
-              const unitPrice = selectedOption?.unitPrice ?? Number(p.price);
-              const cartKey = `${p.id}::${selectedUnit}`;
-              const qty = cart[cartKey] ?? 0;
-              const soldOut = !p.is_available;
-              return (
-                <div
-                  key={p.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setDetailProduct(p)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") setDetailProduct(p);
-                  }}
-                  className={cn(
-                    "group flex cursor-pointer flex-col rounded-lg border border-border/70 bg-card p-1.5 transition",
-                    soldOut ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-pop",
-                  )}
-                >
-                  <div className="relative mb-3">
-                    {selectedOption?.imageUrl || p.image_url ? (
-                      <img
-                        src={selectedOption?.imageUrl || p.image_url || ""}
-                        alt={p.name}
-                        className="aspect-square w-full rounded-md object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
+          <div className="space-y-7">
+            {productGroups.map((group) => (
+              <div key={group.id ?? group.title}>
+                <div className="mb-3 flex items-center gap-3">
+                  <h3 className="text-base font-extrabold">{group.title}</h3>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+                <div className="grid auto-cols-[31%] grid-flow-col grid-rows-2 gap-2 overflow-x-auto pb-3 sm:auto-cols-[23%] lg:auto-cols-[16%] xl:auto-cols-[12%]">
+                  {group.products.map((p, idx) => {
+                    const unitOptions = getUnitOptions(p);
+                    const selectedUnit = selectedUnits[p.id] ?? unitOptions[0]?.label ?? p.unit;
+                    const selectedOption =
+                      unitOptions.find((option) => option.label === selectedUnit) ?? unitOptions[0];
+                    const unitPrice = selectedOption?.unitPrice ?? Number(p.price);
+                    const cartKey = `${p.id}::${selectedUnit}`;
+                    const qty = cart[cartKey] ?? 0;
+                    const soldOut = !p.is_available;
+                    return (
                       <div
+                        key={p.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setDetailProduct(p)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") setDetailProduct(p);
+                        }}
                         className={cn(
-                          "flex aspect-square items-center justify-center rounded-md bg-gradient-to-br text-3xl",
-                          TILE_GRADIENTS[idx % TILE_GRADIENTS.length],
+                          "group flex cursor-pointer flex-col rounded-lg border border-border/70 bg-card p-1.5 transition",
+                          soldOut ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-pop",
                         )}
                       >
-                        <span aria-hidden>{emoji}</span>
-                      </div>
-                    )}
-
-                    {store && !soldOut && (
-                      <span className="absolute left-1 top-1 flex items-center gap-1 rounded-md bg-background/85 px-1.5 py-0.5 text-[9px] font-bold text-foreground backdrop-blur">
-                        <Clock className="h-3 w-3 text-primary" />
-                        {store.delivery_minutes} min
-                      </span>
-                    )}
-                    {soldOut && (
-                      <span className="absolute left-1.5 top-1.5 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[10px] font-bold text-background">
-                        Sold out
-                      </span>
-                    )}
-
-                    <div className="absolute -bottom-3 right-1">
-                      {soldOut ? (
-                        <span className="inline-flex h-8 items-center rounded-lg border border-border bg-muted px-3 text-xs font-bold text-muted-foreground">
-                          N/A
-                        </span>
-                      ) : qty === 0 ? (
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setQty.mutate({
-                              product: p,
-                              selectedUnit,
-                              unitPrice,
-                              quantity: 1,
-                            });
-                          }}
-                          className="inline-flex h-7 items-center rounded-lg border-2 border-primary bg-background px-3 text-[11px] font-extrabold uppercase tracking-wide text-primary shadow-card transition active:scale-95"
-                        >
-                          Add
-                        </button>
-                      ) : (
-                        <div className="flex h-8 items-center gap-1 rounded-lg bg-primary px-1 text-primary-foreground shadow-card">
-                          <button
-                            type="button"
-                            className="flex h-7 w-6 items-center justify-center"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setQty.mutate({
-                                product: p,
-                                selectedUnit,
-                                unitPrice,
-                                quantity: qty - 1,
-                              });
-                            }}
-                          >
-                            <Minus className="h-3.5 w-3.5" />
-                          </button>
-                          <span className="min-w-4 text-center text-xs font-bold">{qty}</span>
-                          <button
-                            type="button"
-                            className="flex h-7 w-6 items-center justify-center"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setQty.mutate({
-                                product: p,
-                                selectedUnit,
-                                unitPrice,
-                                quantity: qty + 1,
-                              });
-                            }}
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <p className="text-[9px] font-medium text-muted-foreground">{selectedUnit}</p>
-                  <h3 className="line-clamp-2 min-h-7 text-[11px] font-semibold leading-tight">
-                    {p.name}
-                  </h3>
-                  {unitOptions.length > 1 && (
-                    <div className="mt-2 grid grid-cols-2 gap-1">
-                      {unitOptions.map((option) => (
-                        <button
-                          key={option.label}
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedUnits((current) => ({ ...current, [p.id]: option.label }));
-                          }}
-                          className={cn(
-                            "rounded-lg border px-2 py-1 text-[10px] font-bold transition",
-                            option.label === selectedUnit
-                              ? "border-primary bg-primary/10 text-primary"
-                              : "border-border bg-muted/40 text-muted-foreground",
+                        <div className="relative mb-3">
+                          {selectedOption?.imageUrl || p.image_url ? (
+                            <img
+                              src={selectedOption?.imageUrl || p.image_url || ""}
+                              alt={p.name}
+                              className="aspect-square w-full rounded-md object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div
+                              className={cn(
+                                "flex aspect-square items-center justify-center rounded-md bg-gradient-to-br text-3xl",
+                                TILE_GRADIENTS[idx % TILE_GRADIENTS.length],
+                              )}
+                            >
+                              <span aria-hidden>{emoji}</span>
+                            </div>
                           )}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
+
+                          {store && !soldOut && (
+                            <span className="absolute left-1 top-1 flex items-center gap-1 rounded-md bg-background/85 px-1.5 py-0.5 text-[9px] font-bold text-foreground backdrop-blur">
+                              <Clock className="h-3 w-3 text-primary" />
+                              {store.delivery_minutes} min
+                            </span>
+                          )}
+                          {soldOut && (
+                            <span className="absolute left-1.5 top-1.5 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[10px] font-bold text-background">
+                              Sold out
+                            </span>
+                          )}
+
+                          <div className="absolute -bottom-3 right-1">
+                            {soldOut ? (
+                              <span className="inline-flex h-8 items-center rounded-lg border border-border bg-muted px-3 text-xs font-bold text-muted-foreground">
+                                N/A
+                              </span>
+                            ) : qty === 0 ? (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setQty.mutate({
+                                    product: p,
+                                    selectedUnit,
+                                    unitPrice,
+                                    quantity: 1,
+                                  });
+                                }}
+                                className="inline-flex h-7 items-center rounded-lg border-2 border-primary bg-background px-3 text-[11px] font-extrabold uppercase tracking-wide text-primary shadow-card transition active:scale-95"
+                              >
+                                Add
+                              </button>
+                            ) : (
+                              <div className="flex h-8 items-center gap-1 rounded-lg bg-primary px-1 text-primary-foreground shadow-card">
+                                <button
+                                  type="button"
+                                  className="flex h-7 w-6 items-center justify-center"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setQty.mutate({
+                                      product: p,
+                                      selectedUnit,
+                                      unitPrice,
+                                      quantity: qty - 1,
+                                    });
+                                  }}
+                                >
+                                  <Minus className="h-3.5 w-3.5" />
+                                </button>
+                                <span className="min-w-4 text-center text-xs font-bold">{qty}</span>
+                                <button
+                                  type="button"
+                                  className="flex h-7 w-6 items-center justify-center"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setQty.mutate({
+                                      product: p,
+                                      selectedUnit,
+                                      unitPrice,
+                                      quantity: qty + 1,
+                                    });
+                                  }}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <p className="text-[9px] font-medium text-muted-foreground">
+                          {selectedUnit}
+                        </p>
+                        <h3 className="line-clamp-2 min-h-7 text-[11px] font-semibold leading-tight">
+                          {p.name}
+                        </h3>
+                        {unitOptions.length > 1 && (
+                          <div className="mt-2 grid grid-cols-2 gap-1">
+                            {unitOptions.map((option) => (
+                              <button
+                                key={option.label}
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setSelectedUnits((current) => ({
+                                    ...current,
+                                    [p.id]: option.label,
+                                  }));
+                                }}
+                                className={cn(
+                                  "rounded-lg border px-2 py-1 text-[10px] font-bold transition",
+                                  option.label === selectedUnit
+                                    ? "border-primary bg-primary/10 text-primary"
+                                    : "border-border bg-muted/40 text-muted-foreground",
+                                )}
+                              >
+                                {option.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <p className="mt-auto pt-1 text-xs font-extrabold">
+                          {formatINR(unitPrice)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                  {group.id && (
+                    <Link
+                      to="/store/$storeId/section/$sectionId"
+                      params={{ storeId, sectionId: group.id }}
+                      className="row-span-2 flex min-h-44 flex-col items-center justify-center rounded-xl border border-dashed border-primary/40 bg-primary/5 p-4 text-center font-extrabold text-primary transition hover:bg-primary/10"
+                    >
+                      <span>View all products</span>
+                      <span aria-hidden className="mt-1 text-xl">
+                        →
+                      </span>
+                    </Link>
                   )}
-                  <p className="mt-auto pt-1 text-xs font-extrabold">{formatINR(unitPrice)}</p>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
       </section>

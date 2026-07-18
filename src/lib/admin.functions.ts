@@ -1471,6 +1471,128 @@ export const adminDeleteStoreSection = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------------------------
+// Store page product sections
+// ---------------------------------------------------------------------------
+
+const storeProductSectionSchema = z.object({
+  id: z.string().uuid().optional(),
+  store_id: z.string().uuid(),
+  title: z.string().trim().min(1).max(120),
+  display_order: z.number().int().min(0).max(1000000),
+  is_active: z.boolean(),
+  product_ids: z.array(z.string().uuid()).max(300),
+});
+
+export const adminListStoreProductSections = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: { storeId: string }) =>
+    z.object({ storeId: z.string().uuid() }).parse(value),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { data: settings, error } = await db
+      .from("marketplace_settings")
+      .select("value")
+      .eq("key", "store_product_sections")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return ((settings?.value?.sections ?? []) as any[])
+      .filter((section) => section.store_id === data.storeId)
+      .sort((a, b) => a.display_order - b.display_order);
+  });
+
+export const getStoreProductSections = createServerFn({ method: "GET" })
+  .inputValidator((value: { storeId: string }) =>
+    z.object({ storeId: z.string().uuid() }).parse(value),
+  )
+  .handler(async ({ data }) => {
+    const db = (await getAdmin()) as any;
+    const { data: settings, error } = await db
+      .from("marketplace_settings")
+      .select("value")
+      .eq("key", "store_product_sections")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return ((settings?.value?.sections ?? []) as any[])
+      .filter((section) => section.store_id === data.storeId && section.is_active)
+      .sort((a, b) => a.display_order - b.display_order)
+      .map(({ id, title, display_order, product_ids }) => ({
+        id,
+        title,
+        display_order,
+        product_ids,
+      }));
+  });
+
+export const adminSaveStoreProductSection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) => storeProductSectionSchema.parse(value))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { data: products, error: productError } = await db
+      .from("products")
+      .select("id")
+      .eq("store_id", data.store_id)
+      .in("id", data.product_ids.length ? data.product_ids : [crypto.randomUUID()]);
+    if (productError) throw new Error(productError.message);
+    if ((products ?? []).length !== data.product_ids.length) {
+      throw new Error("Every selected product must belong to the selected store.");
+    }
+
+    const { data: current, error: readError } = await db
+      .from("marketplace_settings")
+      .select("value")
+      .eq("key", "store_product_sections")
+      .maybeSingle();
+    if (readError) throw new Error(readError.message);
+    const sections = [...(current?.value?.sections ?? [])];
+    const id = data.id ?? crypto.randomUUID();
+    const payload = { ...data, id };
+    const index = sections.findIndex((section: any) => section.id === id);
+    if (index >= 0) sections[index] = payload;
+    else sections.push(payload);
+    const { error } = await db.from("marketplace_settings").upsert({
+      key: "store_product_sections",
+      value: { sections },
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(error.message);
+    await logAction(context.userId, data.id ? "update" : "create", "store_product_section", id, {
+      store_id: data.store_id,
+      title: data.title,
+      item_count: data.product_ids.length,
+    });
+    return { id };
+  });
+
+export const adminDeleteStoreProductSection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: { id: string }) => z.object({ id: z.string().uuid() }).parse(value))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { data: current, error: readError } = await db
+      .from("marketplace_settings")
+      .select("value")
+      .eq("key", "store_product_sections")
+      .maybeSingle();
+    if (readError) throw new Error(readError.message);
+    const sections = (current?.value?.sections ?? []).filter(
+      (section: any) => section.id !== data.id,
+    );
+    const { error } = await db.from("marketplace_settings").upsert({
+      key: "store_product_sections",
+      value: { sections },
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(error.message);
+    await logAction(context.userId, "delete", "store_product_section", data.id);
+    return { ok: true };
+  });
+
+// ---------------------------------------------------------------------------
 // Dynamic pricing
 // ---------------------------------------------------------------------------
 
