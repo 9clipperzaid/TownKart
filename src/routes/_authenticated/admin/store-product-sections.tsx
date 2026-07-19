@@ -76,16 +76,26 @@ function StoreProductSectionsPage() {
     () => new Map(products.map((product) => [product.id, product])),
     [products],
   );
+  const productIdsAssignedElsewhere = useMemo(
+    () =>
+      new Set(
+        sections
+          .filter((section) => section.id !== draft?.id)
+          .flatMap((section) => section.product_ids),
+      ),
+    [draft?.id, sections],
+  );
   const results = useMemo(() => {
     const query = search.trim().toLowerCase();
     return products
       .filter(
         (product) =>
           !draft?.product_ids.includes(product.id) &&
+          !productIdsAssignedElsewhere.has(product.id) &&
           (!query || product.name.toLowerCase().includes(query)),
       )
       .slice(0, 60);
-  }, [draft?.product_ids, products, search]);
+  }, [draft?.product_ids, productIdsAssignedElsewhere, products, search]);
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-store-product-sections", storeId] });
@@ -296,6 +306,13 @@ function StoreProductSectionsPage() {
                       }
                     />
                   ))}
+                  {!results.length && (
+                    <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
+                      {search.trim()
+                        ? "No unassigned products match your search."
+                        : "All store products are already assigned to sections."}
+                    </p>
+                  )}
                 </div>
               </div>
 
