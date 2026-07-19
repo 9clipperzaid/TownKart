@@ -188,21 +188,24 @@ function StorePage() {
   const emoji = store ? (CATEGORIES[store.category]?.emoji ?? "🛍️") : "🛍️";
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return products.filter((p) => {
-      if (availableOnly && !p.is_available) return false;
-      if (!q) return true;
-      return p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q);
-    });
-  }, [products, search, availableOnly]);
+    return products.filter((product) => !availableOnly || product.is_available);
+  }, [products, availableOnly]);
 
   const productGroups = useMemo(() => {
-    if (search.trim() || !storeProductSections.length) {
+    const query = search.trim().toLowerCase();
+    const matchesProduct = (product: Product) =>
+      product.name.toLowerCase().includes(query) ||
+      (product.description ?? "").toLowerCase().includes(query);
+
+    if (!storeProductSections.length) {
+      if (query && !filtered.some(matchesProduct)) return [];
       return [
         {
           id: undefined as string | undefined,
-          title: search.trim() ? "Search results" : "All products",
-          products: filtered,
+          title: query ? "Search results" : "All products",
+          products: query
+            ? [...filtered].sort((a, b) => Number(matchesProduct(b)) - Number(matchesProduct(a)))
+            : filtered,
         },
       ];
     }
@@ -223,7 +226,27 @@ function StorePage() {
 
     const remaining = filtered.filter((product) => !used.has(product.id));
     if (remaining.length) groups.push({ title: "All other products", products: remaining });
-    return groups;
+
+    if (!query) return groups;
+
+    const rankedGroups = groups.map((group, index) => {
+      const titleMatches = group.title.toLowerCase().includes(query);
+      const products = [...group.products].sort(
+        (a, b) => Number(matchesProduct(b)) - Number(matchesProduct(a)),
+      );
+      return {
+        ...group,
+        products,
+        searchMatch: titleMatches || products.some(matchesProduct),
+        originalIndex: index,
+      };
+    });
+
+    if (!rankedGroups.some((group) => group.searchMatch)) return [];
+
+    return rankedGroups.sort(
+      (a, b) => Number(b.searchMatch) - Number(a.searchMatch) || a.originalIndex - b.originalIndex,
+    );
   }, [filtered, search, storeProductSections]);
 
   const availableCount = products.filter((p) => p.is_available).length;
@@ -328,7 +351,7 @@ function StorePage() {
               <div key={i} className="h-52 animate-pulse rounded-2xl bg-muted" />
             ))}
           </div>
-        ) : filtered.length === 0 ? (
+        ) : productGroups.length === 0 ? (
           <div className="rounded-2xl bg-card p-8 text-center shadow-card">
             <p className="text-3xl">🔍</p>
             <p className="mt-2 text-sm font-medium text-muted-foreground">
