@@ -301,7 +301,7 @@ function ProductsPage() {
   const importMut = useMutation({
     mutationFn: (products: BulkImportProduct[]) => bulkImport({ data: { products } }),
     onSuccess: (result) => {
-      toast.success(`Import complete: ${result.created} created, ${result.updated} updated`);
+      toast.success(`Import complete: ${result.created} created, ${result.skipped} skipped`);
       qc.invalidateQueries({ queryKey: ["admin-products"] });
       setImportOpen(false);
     },
@@ -1414,7 +1414,9 @@ function ProductsPage() {
 
             <div className="rounded-xl border border-border/70 bg-muted/30 p-3 text-sm text-muted-foreground">
               CSV columns: name, price, stock_quantity, unit, sku, category, description,
-              discount_price, image_url, status, is_available. Use image_url for product photos.
+              discount_price, image_url, status, is_available. Existing product names in the
+              selected store are skipped; only new products are created. Use image_url for product
+              photos.
             </div>
 
             <input

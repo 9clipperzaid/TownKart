@@ -744,12 +744,28 @@ const productSchema = z.object({
     .default([]),
 });
 
+const normalizeProductName = (name: string) => name.trim().replace(/\s+/g, " ").toLowerCase();
+
 export const adminSaveProduct = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => productSchema.parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const supabaseAdmin = (await getAdmin()) as any;
+    const { data: sameStoreProducts, error: duplicateCheckError } = await supabaseAdmin
+      .from("products")
+      .select("id, name")
+      .eq("store_id", data.store_id)
+      .is("deleted_at", null);
+    if (duplicateCheckError) throw new Error(duplicateCheckError.message);
+    const normalizedName = normalizeProductName(data.name);
+    const duplicate = (sameStoreProducts ?? []).find(
+      (product: { id: string; name: string }) =>
+        product.id !== data.id && normalizeProductName(product.name) === normalizedName,
+    );
+    if (duplicate) {
+      throw new Error(`A product named "${data.name.trim()}" already exists in this store.`);
+    }
     if (data.subcategory_section_id) {
       if (!data.subcategory_id)
         throw new Error("Choose a subcategory before choosing its section.");
@@ -1060,9 +1076,34 @@ export const adminBulkImportProducts = createServerFn({ method: "POST" })
     const supabaseAdmin = await getAdmin();
     const now = new Date().toISOString();
     let created = 0;
-    let updated = 0;
+    let skipped = 0;
+
+    const existingNamesByStore = new Map<string, Set<string>>();
+    for (const storeId of [...new Set(data.products.map((product) => product.store_id))]) {
+      const { data: existingProducts, error } = await supabaseAdmin
+        .from("products")
+        .select("name")
+        .eq("store_id", storeId)
+        .is("deleted_at", null);
+      if (error) throw new Error(error.message);
+      existingNamesByStore.set(
+        storeId,
+        new Set(
+          (existingProducts ?? []).map((product: { name: string }) =>
+            normalizeProductName(product.name),
+          ),
+        ),
+      );
+    }
 
     for (const product of data.products) {
+      const existingNames = existingNamesByStore.get(product.store_id)!;
+      const normalizedName = normalizeProductName(product.name);
+      if (existingNames.has(normalizedName)) {
+        skipped += 1;
+        continue;
+      }
+
       const payload = {
         ...product,
         description: product.description ?? null,
@@ -1072,69 +1113,29 @@ export const adminBulkImportProducts = createServerFn({ method: "POST" })
         sku: product.sku ?? null,
         is_available: product.status === "active" && product.is_available,
       };
-
-      let existing: { id: string; price: number } | null = null;
-      if (product.sku) {
-        const { data: match } = await supabaseAdmin
-          .from("products")
-          .select("id, price")
-          .eq("store_id", product.store_id)
-          .eq("sku", product.sku)
-          .maybeSingle();
-        existing = match;
-      }
-
-      if (!existing) {
-        const { data: matches } = await supabaseAdmin
-          .from("products")
-          .select("id, price")
-          .eq("store_id", product.store_id)
-          .ilike("name", product.name)
-          .limit(1);
-        existing = matches?.[0] ?? null;
-      }
-
-      if (existing) {
-        const priceChanged = Number(existing.price) !== Number(product.price);
-        const { error } = await supabaseAdmin
-          .from("products")
-          .update(priceChanged ? { ...payload, price_updated_at: now } : payload)
-          .eq("id", existing.id);
-        if (error) throw new Error(error.message);
-        if (priceChanged) {
-          await supabaseAdmin.from("price_history").insert({
-            product_id: existing.id,
-            old_price: existing.price,
-            new_price: product.price,
-            changed_by: context.userId,
-            reason: "bulk import",
-          });
-        }
-        updated += 1;
-      } else {
-        const { data: row, error } = await supabaseAdmin
-          .from("products")
-          .insert({ ...payload, price_updated_at: now })
-          .select("id")
-          .single();
-        if (error) throw new Error(error.message);
-        await supabaseAdmin.from("price_history").insert({
-          product_id: row.id,
-          old_price: null,
-          new_price: product.price,
-          changed_by: context.userId,
-          reason: "bulk import",
-        });
-        created += 1;
-      }
+      const { data: row, error } = await supabaseAdmin
+        .from("products")
+        .insert({ ...payload, price_updated_at: now })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      await supabaseAdmin.from("price_history").insert({
+        product_id: row.id,
+        old_price: null,
+        new_price: product.price,
+        changed_by: context.userId,
+        reason: "bulk import",
+      });
+      existingNames.add(normalizedName);
+      created += 1;
     }
 
     await logAction(context.userId, "bulk_import", "product", null, {
       created,
-      updated,
+      skipped,
       count: data.products.length,
     });
-    return { created, updated };
+    return { created, skipped };
   });
 
 export const adminDeleteProduct = createServerFn({ method: "POST" })
