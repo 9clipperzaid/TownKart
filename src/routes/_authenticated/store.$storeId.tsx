@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -16,8 +16,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { getStoreProductSections } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/store/$storeId")({
-  component: StorePage,
+  component: StoreRoute,
 });
+
+function StoreRoute() {
+  const { storeId } = Route.useParams();
+  const isSectionPage = useRouterState({
+    select: (state) => state.location.pathname.startsWith(`/store/${storeId}/section/`),
+  });
+
+  return isSectionPage ? <Outlet /> : <StorePage />;
+}
 
 type Product = {
   id: string;
