@@ -334,8 +334,8 @@ function StorePage() {
                   <h3 className="text-base font-extrabold">{group.title}</h3>
                   <div className="h-px flex-1 bg-border" />
                 </div>
-                <div className="grid auto-cols-[31%] grid-flow-col grid-rows-2 gap-2 overflow-x-auto pb-3 sm:auto-cols-[23%] lg:auto-cols-[16%] xl:auto-cols-[12%]">
-                  {group.products.map((p, idx) => {
+                <div className="grid snap-x snap-mandatory auto-cols-[31%] grid-flow-col grid-rows-1 gap-2 overflow-x-auto overscroll-x-contain pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:auto-cols-[23%] lg:auto-cols-[16%] xl:auto-cols-[12%]">
+                  {(group.id ? group.products.slice(0, 7) : group.products).map((p, idx) => {
                     const unitOptions = getUnitOptions(p);
                     const selectedUnit = selectedUnits[p.id] ?? unitOptions[0]?.label ?? p.unit;
                     const selectedOption =
@@ -354,7 +354,7 @@ function StorePage() {
                           if (event.key === "Enter") setDetailProduct(p);
                         }}
                         className={cn(
-                          "group flex cursor-pointer flex-col rounded-lg border border-border/70 bg-card p-1.5 transition",
+                          "group flex cursor-pointer snap-start flex-col rounded-lg border border-border/70 bg-card p-1.5 transition",
                           soldOut ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-pop",
                         )}
                       >
@@ -489,7 +489,7 @@ function StorePage() {
                     <Link
                       to="/store/$storeId/section/$sectionId"
                       params={{ storeId, sectionId: group.id }}
-                      className="row-span-2 flex min-h-44 flex-col items-center justify-center rounded-xl border border-dashed border-primary/40 bg-primary/5 p-4 text-center font-extrabold text-primary transition hover:bg-primary/10"
+                      className="flex min-h-44 snap-start flex-col items-center justify-center rounded-xl border border-dashed border-primary/40 bg-primary/5 p-4 text-center font-extrabold text-primary transition hover:bg-primary/10"
                     >
                       <span>View all products</span>
                       <span aria-hidden className="mt-1 text-xl">
