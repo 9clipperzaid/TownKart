@@ -434,6 +434,7 @@ function SettingsPage() {
                       bucket="marketplace-banners"
                       value={banner.image_url}
                       onChange={(image_url) => updateBanner(index, { image_url })}
+                      allowImageUrl={false}
                     />
                   )}
                   <div className="space-y-4">

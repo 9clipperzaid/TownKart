@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
-import { ImagePlus, Trash2, UploadCloud, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ImagePlus, Link2, Trash2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { userErrorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { compressImageForUpload } from "@/lib/image-compression";
 
 type Bucket =
@@ -18,16 +19,38 @@ export function ImageUpload({
   bucket,
   value,
   onChange,
+  allowImageUrl = true,
 }: {
   label: string;
   bucket: Bucket;
   value: string;
   onChange: (url: string) => void;
+  allowImageUrl?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [urlInput, setUrlInput] = useState(value);
+
+  useEffect(() => setUrlInput(value), [value]);
+
+  function applyImageUrl() {
+    const nextUrl = urlInput.trim();
+    if (!nextUrl) {
+      onChange("");
+      return;
+    }
+
+    try {
+      const parsed = new URL(nextUrl);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error();
+      onChange(nextUrl);
+      toast.success("Image URL added");
+    } catch {
+      toast.error("Enter a valid http or https image URL");
+    }
+  }
 
   function storagePathFromPublicUrl(url: string) {
     try {
@@ -165,6 +188,40 @@ export function ImageUpload({
           e.currentTarget.value = "";
         }}
       />
+      {allowImageUrl && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            or use an image URL
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Link2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="url"
+                inputMode="url"
+                className="pl-9"
+                value={urlInput}
+                placeholder="https://res.cloudinary.com/..."
+                onChange={(event) => setUrlInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    applyImageUrl();
+                  }
+                }}
+              />
+            </div>
+            <Button type="button" variant="outline" onClick={applyImageUrl}>
+              Use URL
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Paste a public Cloudinary or direct image link. The preview above confirms it can load.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

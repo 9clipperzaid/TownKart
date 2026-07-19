@@ -364,6 +364,7 @@ function StoresPage() {
                   bucket="store-banners"
                   value={form.banner_url}
                   onChange={(banner_url) => setForm({ ...form, banner_url })}
+                  allowImageUrl={false}
                 />
               </div>
 
