@@ -1,10 +1,8 @@
 User-agent: *
 Allow: /
-Disallow: /home
 Disallow: /cart
 Disallow: /orders
 Disallow: /profile
-Disallow: /store
 Disallow: /auth
 
 Sitemap: https://www.townkart.store/sitemap.xml

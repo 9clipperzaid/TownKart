@@ -35,6 +35,12 @@ const structuredData = {
     "@type": "City",
     name: "Nehtaur",
   },
+  address: {
+    "@type": "PostalAddress",
+    addressLocality: "Nehtaur",
+    addressRegion: "Uttar Pradesh",
+    addressCountry: "IN",
+  },
 };
 
 function NotFoundComponent() {
