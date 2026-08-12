@@ -18,6 +18,7 @@ import { AppSplash } from "@/components/AppSplash";
 import { supabase } from "@/integrations/supabase/client";
 
 const SITE_URL = "https://www.townkart.store";
+const HOME_URL = `${SITE_URL}/home`;
 const SITE_NAME = "TownKart";
 
 const structuredData = {
@@ -26,7 +27,7 @@ const structuredData = {
   "@id": `${SITE_URL}/#business`,
   name: SITE_NAME,
   alternateName: "TownKart Store",
-  url: SITE_URL,
+  url: HOME_URL,
   logo: `${SITE_URL}/favicon-512.png`,
   image: `${SITE_URL}/townkart-logo.png`,
   description:
@@ -122,14 +123,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:site_name", content: SITE_NAME },
       { property: "og:type", content: "website" },
-      { property: "og:url", content: SITE_URL },
+      { property: "og:url", content: HOME_URL },
       { property: "og:image", content: `${SITE_URL}/townkart-logo.png` },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@TownKart" },
       { name: "theme-color", content: "#16a34a" },
     ],
     links: [
-      { rel: "canonical", href: SITE_URL },
+      { rel: "canonical", href: HOME_URL },
       { rel: "icon", type: "image/png", sizes: "48x48", href: "/favicon-48.png" },
       { rel: "icon", type: "image/png", sizes: "192x192", href: "/favicon-192.png" },
       { rel: "apple-touch-icon", sizes: "180x180", href: "/favicon-180.png" },
