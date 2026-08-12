@@ -19,6 +19,8 @@ import {
   adminBulkUpdateProductInventory,
   adminBulkDeleteProducts,
   adminBulkImportProducts,
+  adminDeleteProductImport,
+  adminListProductImports,
   adminListStores,
   adminListProducts,
   adminSaveProduct,
@@ -142,6 +144,17 @@ type BulkImportProduct = {
   }[];
 };
 
+type ProductImportRow = {
+  id: string;
+  batch_id: string | null;
+  created_at: string;
+  store_name: string;
+  created: number;
+  skipped: number;
+  product_ids: string[];
+  is_deleted: boolean;
+};
+
 function emptyForm(storeId: string): FormState {
   return {
     store_id: storeId,
@@ -174,6 +187,8 @@ function ProductsPage() {
   const listSubcategorySections = useServerFn(adminListSubcategoryProductSections);
   const save = useServerFn(adminSaveProduct);
   const bulkImport = useServerFn(adminBulkImportProducts);
+  const listProductImports = useServerFn(adminListProductImports);
+  const deleteProductImport = useServerFn(adminDeleteProductImport);
   const bulkAssignCategory = useServerFn(adminBulkAssignProductCategory);
   const bulkUpdateInventory = useServerFn(adminBulkUpdateProductInventory);
   const bulkDelete = useServerFn(adminBulkDeleteProducts);
@@ -230,6 +245,10 @@ function ProductsPage() {
       listProducts({
         data: storeFilter === "all" ? {} : { storeId: storeFilter },
       }) as unknown as Promise<ProductRow[]>,
+  });
+  const { data: productImports = [] } = useQuery({
+    queryKey: ["admin-product-imports"],
+    queryFn: () => listProductImports() as Promise<ProductImportRow[]>,
   });
 
   const { data: historyRows = [] } = useQuery({
@@ -303,9 +322,20 @@ function ProductsPage() {
     onSuccess: (result) => {
       toast.success(`Import complete: ${result.created} created, ${result.skipped} skipped`);
       qc.invalidateQueries({ queryKey: ["admin-products"] });
+      qc.invalidateQueries({ queryKey: ["admin-product-imports"] });
       setImportOpen(false);
     },
     onError: (e: Error) => toast.error(userErrorMessage(e)),
+  });
+
+  const deleteImportMut = useMutation({
+    mutationFn: (batchId: string) => deleteProductImport({ data: { batch_id: batchId } }),
+    onSuccess: (result) => {
+      toast.success(`${result.deleted} imported products moved to trash`);
+      qc.invalidateQueries({ queryKey: ["admin-products"] });
+      qc.invalidateQueries({ queryKey: ["admin-product-imports"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "Could not delete CSV import")),
   });
 
   const bulkCategoryMut = useMutation({
@@ -1447,6 +1477,52 @@ function ProductsPage() {
                 <Upload className="h-4 w-4" />
                 {importMut.isPending ? "Importing..." : "Choose CSV"}
               </Button>
+            </div>
+
+            <div className="space-y-2 border-t border-border pt-4">
+              <Label>Recent CSV imports</Label>
+              {productImports.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No removable imports yet.</p>
+              ) : (
+                productImports.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border/70 p-3"
+                  >
+                    <div className="min-w-0 text-sm">
+                      <p className="truncate font-semibold">{item.store_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.created} created, {item.skipped} skipped ·{" "}
+                        {new Date(item.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      disabled={
+                        item.is_deleted ||
+                        !item.batch_id ||
+                        !item.product_ids.length ||
+                        deleteImportMut.isPending
+                      }
+                      onClick={() => {
+                        if (
+                          item.batch_id &&
+                          window.confirm(
+                            `Move all ${item.created} products imported into ${item.store_name} to trash?`,
+                          )
+                        ) {
+                          deleteImportMut.mutate(item.batch_id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {item.is_deleted ? "Deleted" : "Delete import"}
+                    </Button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </DialogContent>

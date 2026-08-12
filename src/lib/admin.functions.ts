@@ -1075,6 +1075,8 @@ export const adminBulkImportProducts = createServerFn({ method: "POST" })
     await assertAdmin(context.userId);
     const supabaseAdmin = await getAdmin();
     const now = new Date().toISOString();
+    const batchId = crypto.randomUUID();
+    const createdProductIds: string[] = [];
     let created = 0;
     let skipped = 0;
 
@@ -1127,15 +1129,109 @@ export const adminBulkImportProducts = createServerFn({ method: "POST" })
         reason: "bulk import",
       });
       existingNames.add(normalizedName);
+      createdProductIds.push(row.id);
       created += 1;
     }
 
-    await logAction(context.userId, "bulk_import", "product", null, {
+    await logAction(context.userId, "bulk_import", "product", batchId, {
       created,
       skipped,
       count: data.products.length,
+      store_id: data.products[0]?.store_id ?? null,
+      product_ids: createdProductIds,
     });
-    return { created, skipped };
+    return { created, skipped, batch_id: batchId };
+  });
+
+export const adminListProductImports = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { data: logs, error } = await db
+      .from("audit_logs")
+      .select("id, entity_id, details, created_at")
+      .eq("action", "bulk_import")
+      .eq("entity_type", "product")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error) throw new Error(error.message);
+    const { data: deletionLogs, error: deletionError } = await db
+      .from("audit_logs")
+      .select("entity_id")
+      .eq("action", "delete_bulk_import")
+      .eq("entity_type", "product");
+    if (deletionError) throw new Error(deletionError.message);
+    const deletedBatchIds = new Set(
+      (deletionLogs ?? []).map((log: any) => log.entity_id).filter(Boolean),
+    );
+
+    const storeIds = [
+      ...new Set((logs ?? []).map((log: any) => log.details?.store_id).filter(Boolean)),
+    ];
+    const { data: stores, error: storesError } = storeIds.length
+      ? await db.from("stores").select("id, name").in("id", storeIds)
+      : { data: [], error: null };
+    if (storesError) throw new Error(storesError.message);
+    const storeNames = new Map((stores ?? []).map((store: any) => [store.id, store.name]));
+
+    return (logs ?? []).map((log: any) => ({
+      id: log.id,
+      batch_id: log.entity_id,
+      created_at: log.created_at,
+      store_id: log.details?.store_id ?? null,
+      store_name: storeNames.get(log.details?.store_id) ?? "Unknown store",
+      created: Number(log.details?.created ?? 0),
+      skipped: Number(log.details?.skipped ?? 0),
+      product_ids: Array.isArray(log.details?.product_ids) ? log.details.product_ids : [],
+      is_deleted: deletedBatchIds.has(log.entity_id),
+    }));
+  });
+
+export const adminDeleteProductImport = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) => z.object({ batch_id: z.string().uuid() }).parse(value))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const db = (await getAdmin()) as any;
+    const { data: log, error: logError } = await db
+      .from("audit_logs")
+      .select("details")
+      .eq("action", "bulk_import")
+      .eq("entity_type", "product")
+      .eq("entity_id", data.batch_id)
+      .maybeSingle();
+    if (logError) throw new Error(logError.message);
+    const productIds = Array.isArray(log?.details?.product_ids) ? log.details.product_ids : [];
+    if (!productIds.length) throw new Error("This older import cannot be deleted as one batch.");
+
+    const deletionBatchId = crypto.randomUUID();
+    const { data: products, error: readError } = await db
+      .from("products")
+      .select("id, status, is_available")
+      .in("id", productIds)
+      .is("deleted_at", null);
+    if (readError) throw new Error(readError.message);
+    const deletedAt = new Date().toISOString();
+    for (const product of products ?? []) {
+      const { error } = await db
+        .from("products")
+        .update({
+          deleted_at: deletedAt,
+          deletion_batch_id: deletionBatchId,
+          deleted_previous_status: product.status,
+          deleted_previous_available: product.is_available,
+          status: "inactive",
+          is_available: false,
+        })
+        .eq("id", product.id);
+      if (error) throw new Error(error.message);
+    }
+    await logAction(context.userId, "delete_bulk_import", "product", data.batch_id, {
+      product_count: products?.length ?? 0,
+      deletion_batch_id: deletionBatchId,
+    });
+    return { deleted: products?.length ?? 0 };
   });
 
 export const adminDeleteProduct = createServerFn({ method: "POST" })
