@@ -31,35 +31,56 @@ function buildOpenWaOtpMessage(code: string): string {
     throw new Error("OPENWA_OTP_MESSAGE_TEMPLATE must contain {{code}}.");
   }
 
-  return template
-    .replaceAll("{{code}}", code)
-    .replaceAll("{{minutes}}", "5");
+  return template.replaceAll("{{code}}", code).replaceAll("{{minutes}}", "5");
 }
 
-async function sendThroughOpenWa(phone: string, code: string): Promise<void> {
-  const baseUrl = process.env.OPENWA_BASE_URL?.replace(/\/+$/, "");
-  const apiKey = process.env.OPENWA_API_KEY;
-  const sessionId = process.env.OPENWA_SESSION_ID;
-
-  if (!baseUrl || !apiKey || !sessionId) {
+function getOpenWaBaseUrl(): URL {
+  const configuredUrl = process.env.OPENWA_BASE_URL?.trim();
+  if (!configuredUrl) {
     throw new Error("WhatsApp OTP service is not configured.");
   }
 
-  const response = await fetch(
-    `${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/messages/send-text`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": apiKey,
-      },
-      body: JSON.stringify({
-        chatId: `${phone}@c.us`,
-        text: buildOpenWaOtpMessage(code),
-      }),
-      signal: AbortSignal.timeout(15_000),
+  // Railway variables are commonly entered as a hostname only. fetch() needs
+  // an absolute URL, so use HTTPS for that safe, deployment-friendly form.
+  const absoluteUrl = /^https?:\/\//i.test(configuredUrl)
+    ? configuredUrl
+    : `https://${configuredUrl}`;
+
+  try {
+    const url = new URL(absoluteUrl);
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      throw new Error("unsupported protocol");
+    }
+    return url;
+  } catch {
+    throw new Error("OPENWA_BASE_URL must be a valid HTTP(S) URL.");
+  }
+}
+
+async function sendThroughOpenWa(phone: string, code: string): Promise<void> {
+  const apiKey = process.env.OPENWA_API_KEY;
+  const sessionId = process.env.OPENWA_SESSION_ID;
+
+  if (!apiKey || !sessionId) {
+    throw new Error("WhatsApp OTP service is not configured.");
+  }
+
+  const endpoint = getOpenWaBaseUrl();
+  endpoint.pathname = `/api/sessions/${encodeURIComponent(sessionId)}/messages/send-text`;
+  endpoint.search = "";
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": apiKey,
     },
-  );
+    body: JSON.stringify({
+      chatId: `${phone}@c.us`,
+      text: buildOpenWaOtpMessage(code),
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
 
   if (!response.ok) {
     console.error("[OpenWA] OTP send failed", response.status, await response.text());
